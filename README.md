@@ -1,10 +1,20 @@
-# M-5 Multitronic
+# Star Trek TOS screensavers
+
+Two macOS screensavers built from set props in the original series. Both are
+original code; only the look is referenced.
+
+- **M-5 Multitronic** — the M-5 computer readout panel
+- **TOS Chronometer** — the stardate chronometer
+
+---
+
+## M-5 Multitronic
 
 A macOS screensaver based on the M-5 computer readout panel from *Star Trek*
 TOS, "The Ultimate Computer" (S2E24) — the black panel of short coloured light
 bars that blink, extend and retract while the machine thinks.
 
-## What it does
+### What it does
 
 Bars sit on a jittered grid over a black field. Each one grows from an anchor
 point (some ease in, ~25% snap on instantly), holds for 1.2–6.5s — sometimes
@@ -25,23 +35,9 @@ CRT vignette.
 
 ![](still-a.png)
 
-## Install
+### Knobs
 
-```bash
-./build.sh && cp -R "build/M-5 Multitronic.saver" ~/"Library/Screen Savers/"
-```
-
-Then pick it in System Settings → Screen Saver ("M-5 Multitronic", under Other).
-
-Run the same line again to reinstall after editing `src/M5PanelView.m`. If the
-screensaver is already selected, `killall legacyScreenSaver` afterwards so macOS
-drops the cached bundle.
-
-To remove: `rm -rf ~/"Library/Screen Savers/M-5 Multitronic.saver"`
-
-## Knobs
-
-All in `src/M5PanelView.m`:
+All in `src/M5PanelView.swift`:
 
 | What | Where |
 |---|---|
@@ -55,7 +51,7 @@ All in `src/M5PanelView.m`:
 | Glow strength and spread | `widthMul` / `alphaMul` in `drawRect:` |
 | Vertical vs horizontal mix | `bar->vertical = (frand() < 0.72)` |
 
-## Performance
+### Performance
 
 CPU rasterisation of `drawRect:` at 2560×1600 runs roughly 9–15 ms/frame on a
 1.4 GHz Core i5-8257U, varying with thermal state and with how much of the
@@ -77,6 +73,70 @@ whole array, so that the core landed on top. `plusLighter` is saturating
 addition and therefore order-independent, so they are now emitted in one visit
 per bar — same pixels, a third of the per-bar state evaluation.
 
+---
+
+## TOS Chronometer
+
+A dark panel carrying two chrome-bezelled windows of amber drum-counter digits,
+an indicator lamp over each, and letterspaced labels beneath. The left window
+shows a stardate, the right a 24-hour shipboard clock. Panel proportions,
+window sizes, lamp placement and label position are all measured off the prop.
+
+The digits are **not a font**. The prop uses a mechanical drum counter, so the
+ten numerals plus the colon are stroked vector paths in `src/DrumDigits.swift`,
+built on a unit box and sized by a single stroke-weight fraction. Each digit
+carries the horizontal seam where the two halves of the wheel meet, and when a
+digit changes the old one rises out of view while the new one comes up from
+below, clipped by the window.
+
+The labels use Helvetica, which ships with macOS. The prop's labels are a
+letterspaced neo-grotesque — consistent with Helvetica, though the broadcast
+source is too soft to identify it definitively. Nothing is bundled, so there is
+no font-licensing question.
+
+The whole panel drifts slowly on two incommensurate periods, so a clock left on
+screen for hours isn't a burn-in risk.
+
+![](chronometer.png)
+
+### Stardate
+
+Stardates aren't canon, so `Stardate` in `src/ChronometerView.swift` states an
+explicit convention: 1000.0 on 2020-01-01, advancing 1.0 per day, which puts
+the present in the 3000s — the range TOS actually used. Change `epochValue`,
+`perDay` and `epochDate` to re-base it.
+
+### Knobs
+
+| What | Where |
+|---|---|
+| Digit, lamp and label colours | `Style` in `ChronometerView.swift` |
+| Glow strength and spread | `Style.bloom` |
+| Roll speed | `rollDuration` |
+| Panel and window proportions | `draw(_:)` — fractions are measured off the prop |
+| Digit letterforms | `DrumDigits.path(_:in:)` |
+| Stroke weight | `DrumDigits.strokeFraction` |
+| Drift rate and amount | the `amp` / `drift` block in `draw(_:)` |
+
+### Performance
+
+7.7 ms/frame at 2560×1600 on a 1.4 GHz Core i5-8257U, against a 16.6 ms budget
+at 60fps.
+
+---
+
+## Install
+
+```bash
+./build.sh && cp -R build/*.saver ~/"Library/Screen Savers/"
+```
+
+Then pick either in System Settings → Screen Saver, under Other. Run the same
+line again to reinstall after editing. If a screensaver is already selected,
+`killall legacyScreenSaver` afterwards so macOS drops the cached bundle.
+
+To remove: `rm -rf ~/"Library/Screen Savers/M-5 Multitronic.saver" ~/"Library/Screen Savers/TOS Chronometer.saver"`
+
 ## Notes
 
 `build.sh` builds for the host architecture. Screensaver bundles must match the architecture of the host process, and
@@ -87,7 +147,7 @@ Moving to an Apple Silicon Mac: copy this folder over, install the Command Line
 Tools (`xcode-select --install`) if they aren't there, and run `./build.sh`.
 It detects `arm64` and sets the deployment floor to 11.0 automatically.
 
-### A Swift 5.2 landmine
+## A Swift 5.2 landmine
 
 Written in Swift, built with `swiftc` from the Command Line Tools. One trap is
 worth recording: a **file-scope `let` with a non-trivial initialiser crashes on
