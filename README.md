@@ -83,4 +83,10 @@ Moving to an Apple Silicon Mac: copy this folder over, install the Command Line
 Tools (`xcode-select --install`) if they aren't there, and run `./build.sh`.
 It detects `arm64` and sets the deployment floor to 11.0 automatically.
 
-The animation is original code; only the look is referenced.
+The animation is original code; only the look is referenced. Star Trek is a
+trademark of CBS Studios Inc.; this project is unaffiliated fan work and ships
+no material from the show.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
