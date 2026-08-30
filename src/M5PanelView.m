@@ -88,8 +88,10 @@ static inline double frange(double lo, double hi) {
 }
 
 static int pickColor(void) {
-    CGFloat total = 0;
-    for (int i = 0; i < kPaletteCount; i++) total += kPalette[i].weight;
+    static CGFloat total = 0;
+    if (total == 0) {
+        for (int i = 0; i < kPaletteCount; i++) total += kPalette[i].weight;
+    }
     CGFloat r = (CGFloat)frand() * total;
     for (int i = 0; i < kPaletteCount; i++) {
         r -= kPalette[i].weight;
@@ -193,6 +195,7 @@ static int pickColor(void) {
 
 - (void)respawnBar:(M5Bar *)bar
 {
+    NSRect bounds = self.bounds;
     [self releaseCell:bar->cell];
 
     int cell = [self claimFreeCell];
@@ -221,8 +224,8 @@ static int pickColor(void) {
 
     // Grow towards whichever side has the room. Without this, long bars
     // that spawn near an edge just get clamped back into stubs.
-    CGFloat roomPos = bar->vertical ? NSHeight(self.bounds) - bar->y
-                                    : NSWidth(self.bounds)  - bar->x;
+    CGFloat roomPos = bar->vertical ? NSHeight(bounds) - bar->y
+                                    : NSWidth(bounds)  - bar->x;
     CGFloat roomNeg = bar->vertical ? bar->y : bar->x;
     if (roomPos >= wantLen && roomNeg >= wantLen) {
         bar->dir = (frand() < 0.5) ? 1 : -1;
@@ -235,8 +238,8 @@ static int pickColor(void) {
 
     // Bake in the CRT edge falloff once, rather than compositing a
     // full-screen gradient every frame (that cost ~70ms at 2560x1600).
-    CGFloat nx = (bar->x - NSMidX(self.bounds)) * _invHalfW;
-    CGFloat ny = (bar->y - NSMidY(self.bounds)) * _invHalfH;
+    CGFloat nx = (bar->x - NSMidX(bounds)) * _invHalfW;
+    CGFloat ny = (bar->y - NSMidY(bounds)) * _invHalfH;
     CGFloat r2 = MIN(1.0, (nx * nx + ny * ny) * 0.75);
     bar->vignette = 1.0 - 0.45 * r2 * r2;
 
@@ -365,31 +368,32 @@ static void barState(const M5Bar *b, CGFloat *outLen, CGFloat *outAlpha)
     CGContextSetLineCap(ctx, kCGLineCapRound);
     CGContextSetBlendMode(ctx, kCGBlendModePlusLighter);
 
-    // Three passes: wide dim bloom, tighter halo, then the saturated core.
-    // Widest first so the core lands on top.
+    // Each bar is a wide dim bloom, a tighter halo, and the saturated core.
+    // plusLighter is saturating addition, so the three are order-independent
+    // and can all be laid down in one visit to the bar — no need for three
+    // passes over the whole array just to get the core on top.
     const CGFloat widthMul[3] = { 4.6, 2.5, 1.0 };
     const CGFloat alphaMul[3] = { 0.115, 0.25, 0.95 };
 
-    for (int pass = 0; pass < 3; pass++) {
-        for (NSUInteger i = 0; i < _barCount; i++) {
-            const M5Bar *bar = &_bars[i];
-            CGFloat len, alpha;
-            barState(bar, &len, &alpha);
-            if (len <= 0.5 || alpha <= 0.01) continue;
+    for (NSUInteger i = 0; i < _barCount; i++) {
+        const M5Bar *bar = &_bars[i];
+        CGFloat len, alpha;
+        barState(bar, &len, &alpha);
+        if (len <= 0.5 || alpha <= 0.01) continue;
 
-            // Pull the bloom in on stubby bars so they read as short strokes
-            // rather than glowing dots.
-            CGFloat tight = MIN(1.0, len / (bar->thickness * 9.0));
-            CGFloat w = bar->thickness * (1.0 + (widthMul[pass] - 1.0) * tight);
+        // Pull the bloom in on stubby bars so they read as short strokes
+        // rather than glowing dots.
+        CGFloat tight = MIN(1.0, len / (bar->thickness * 9.0));
 
-            const M5Color c = kPalette[bar->colorIndex];
-            CGContextSetRGBStrokeColor(ctx, c.r, c.g, c.b,
-                                       alpha * bar->vignette * alphaMul[pass]);
-            CGContextSetLineWidth(ctx, w);
+        const M5Color c = kPalette[bar->colorIndex];
+        CGFloat a = alpha * bar->vignette;
+        CGFloat x2 = bar->x + (bar->vertical ? 0 : len * bar->dir);
+        CGFloat y2 = bar->y + (bar->vertical ? len * bar->dir : 0);
 
-            CGFloat x2 = bar->x + (bar->vertical ? 0 : len * bar->dir);
-            CGFloat y2 = bar->y + (bar->vertical ? len * bar->dir : 0);
-
+        for (int pass = 0; pass < 3; pass++) {
+            CGContextSetRGBStrokeColor(ctx, c.r, c.g, c.b, a * alphaMul[pass]);
+            CGContextSetLineWidth(ctx,
+                bar->thickness * (1.0 + (widthMul[pass] - 1.0) * tight));
             CGContextMoveToPoint(ctx, bar->x, bar->y);
             CGContextAddLineToPoint(ctx, x2, y2);
             CGContextStrokePath(ctx);

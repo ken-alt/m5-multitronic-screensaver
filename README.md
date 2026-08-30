@@ -61,9 +61,9 @@ CPU rasterisation of `drawRect:`, on a 1.4 GHz Core i5-8257U:
 
 | Resolution | ms/frame |
 |---|---|
-| 1440×900 | 3.2 |
-| 2560×1600 | 10.0 |
-| 3360×2100 | 17.7 |
+| 1440×900 | 2.9 |
+| 2560×1600 | 8.3 |
+| 3360×2100 | 14.2 |
 
 The first version composited a full-screen radial gradient for the vignette,
 which cost ~72 ms/frame at 2560×1600 on its own. Baking the falloff into each
@@ -71,7 +71,12 @@ bar's alpha at spawn time gives the same look for free.
 
 Cost scales with lit area, so it's the long bars and the width of the outer
 bloom (`widthMul[0]`) that dominate — lengthen the bars much further and that
-pass is the first thing to trim.
+is the first thing to trim.
+
+The three strokes that make up a bar used to be drawn as three passes over the
+whole array, so that the core landed on top. `plusLighter` is saturating
+addition and therefore order-independent, so they are now emitted in one visit
+per bar — same pixels, a third of the per-bar state evaluation.
 
 ## Notes
 
