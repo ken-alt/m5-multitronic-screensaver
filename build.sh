@@ -51,5 +51,13 @@ saver() {
   echo "Built ${out}"
 }
 
-saver "M-5 Multitronic" "M5Panel"     src/M5Panel-Info.plist     src/M5PanelView.swift
-saver "TOS Chronometer" "Chronometer" src/Chronometer-Info.plist src/ChronometerView.swift src/DrumDigits.swift
+COUNTER="src/CounterWindow.swift src/DrumDigits.swift src/ChronometerView.swift"
+
+saver "M-5 Multitronic" "M5Panel" src/M5Panel-Info.plist \
+      src/M5PanelView.swift
+
+saver "TOS Chronometer" "Chronometer" src/Chronometer-Info.plist \
+      ${COUNTER}
+
+saver "M-5 Multitronic with Clock" "M5Clock" src/M5Clock-Info.plist \
+      src/M5PanelView.swift src/M5ClockView.swift ${COUNTER}

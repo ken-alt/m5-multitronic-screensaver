@@ -1,10 +1,11 @@
 # Star Trek TOS screensavers
 
-Two macOS screensavers built from set props in the original series. Both are
+Three macOS screensavers built from set props in the original series. All are
 original code; only the look is referenced.
 
 - **M-5 Multitronic** — the M-5 computer readout panel
 - **TOS Chronometer** — the stardate chronometer
+- **M-5 Multitronic with Clock** — the panel with the shipboard clock along the top
 
 ---
 
@@ -120,8 +121,31 @@ the present in the 3000s — the range TOS actually used. Change `epochValue`,
 
 ### Performance
 
-7.7 ms/frame at 2560×1600 on a 1.4 GHz Core i5-8257U, against a 16.6 ms budget
-at 60fps.
+At 2560×1600 on a 1.4 GHz Core i5-8257U, against a 16.6 ms budget at 60fps:
+M-5 panel 3.7 ms, chronometer 7.9 ms, panel with clock 6.9 ms.
+
+---
+
+## M-5 Multitronic with Clock
+
+The bar field with the chronometer's shipboard clock along the top: lamp,
+bezelled window, letterspaced label.
+
+`M5ClockView` subclasses `M5PanelView` rather than duplicating the field, and
+the counter window is shared with the chronometer through `CounterWindow`. The
+clock reserves the strip it occupies via `reservedRegion`, so bars neither
+spawn inside it nor grow across it — the field leaves room instead of running
+underneath. The reserved rect covers the clock's full drift range, so it stays
+correct wherever the drift puts it, and it is computed from `bounds` alone
+because it is consulted during `init`.
+
+The clock drifts too, but by a third as much as the chronometer's, since it is
+already close to a screen edge.
+
+![](m5-with-clock.png)
+
+To make the clock bigger, smaller, or lower, edit `layout(offsetBy:)` in
+`src/M5ClockView.swift`; the reserved region follows automatically.
 
 ---
 
@@ -135,7 +159,7 @@ Then pick either in System Settings → Screen Saver, under Other. Run the same
 line again to reinstall after editing. If a screensaver is already selected,
 `killall legacyScreenSaver` afterwards so macOS drops the cached bundle.
 
-To remove: `rm -rf ~/"Library/Screen Savers/M-5 Multitronic.saver" ~/"Library/Screen Savers/TOS Chronometer.saver"`
+To remove, delete the matching bundles from `~/Library/Screen Savers/`.
 
 ## Notes
 

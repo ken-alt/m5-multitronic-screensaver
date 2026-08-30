@@ -161,6 +161,12 @@ public class M5PanelView: ScreenSaverView {
         super.init(coder: coder)
     }
 
+    /// A region bars will not spawn into or grow across. Subclasses that put
+    /// something on top of the field (a clock, say) override this so the field
+    /// leaves room instead of running through it. Computed from `bounds` only,
+    /// because it is consulted during `init`.
+    var reservedRegion: CGRect { return .zero }
+
     public override var isOpaque: Bool { return true }
     public override var hasConfigureSheet: Bool { return false }
     public override var configureSheet: NSWindow? { return nil }
@@ -217,11 +223,34 @@ public class M5PanelView: ScreenSaverView {
     private func claimFreeCell() -> Int {
         let total = cellUsed.count
         guard total > 0 else { return -1 }
+        let reserved = reservedRegion
         for _ in 0 ..< 40 {
             let c = Int.random(in: 0 ..< total)
-            if !cellUsed[c] { cellUsed[c] = true; return c }
+            if cellUsed[c] { continue }
+            if !reserved.isEmpty {
+                let centre = CGPoint(x: originX + (CGFloat(c % cols) + 0.5) * cellW,
+                                     y: originY + (CGFloat(c / cols) + 0.5) * cellH)
+                if reserved.contains(centre) { continue }
+            }
+            cellUsed[c] = true
+            return c
         }
         return -1
+    }
+
+    /// How far this bar may grow before it would enter `reserved`.
+    private func roomBefore(_ reserved: CGRect, _ bar: Bar) -> CGFloat {
+        if reserved.contains(CGPoint(x: bar.x, y: bar.y)) { return 0 }
+        let far = CGFloat.greatestFiniteMagnitude
+        if bar.vertical {
+            guard bar.x >= reserved.minX, bar.x <= reserved.maxX else { return far }
+            if bar.dir > 0 { return bar.y < reserved.minY ? reserved.minY - bar.y : far }
+            return bar.y > reserved.maxY ? bar.y - reserved.maxY : far
+        } else {
+            guard bar.y >= reserved.minY, bar.y <= reserved.maxY else { return far }
+            if bar.dir > 0 { return bar.x < reserved.minX ? reserved.minX - bar.x : far }
+            return bar.x > reserved.maxX ? bar.x - reserved.maxX : far
+        }
     }
 
     /// Frees `oldCell` and returns a freshly configured bar in a new slot.
@@ -271,6 +300,14 @@ public class M5PanelView: ScreenSaverView {
 
         let limit = (bar.dir > 0 ? roomPos : roomNeg) - unit * 2.0
         bar.maxLen = min(wantLen, max(span * 0.5, limit))
+
+        // Stop short of anything drawn on top of the field rather than running
+        // under it. Applied after the floor above, so a bar with no room at all
+        // ends up zero-length and simply isn't drawn.
+        let reserved = reservedRegion
+        if !reserved.isEmpty {
+            bar.maxLen = min(bar.maxLen, roomBefore(reserved, bar) - unit * 2.0)
+        }
 
         // Bake in the CRT edge falloff once, rather than compositing a
         // full-screen gradient every frame (that cost ~70ms at 2560x1600).
