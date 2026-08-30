@@ -83,17 +83,28 @@ an indicator lamp over each, and letterspaced labels beneath. The left window
 shows a stardate, the right a 24-hour shipboard clock. Panel proportions,
 window sizes, lamp placement and label position are all measured off the prop.
 
-The digits are **not a font**. The prop uses a mechanical drum counter, so the
-ten numerals plus the colon are stroked vector paths in `src/DrumDigits.swift`,
-built on a unit box and sized by a single stroke-weight fraction. Each digit
+The digits are **DIN Condensed Bold**, which ships with macOS in
+`/System/Library/Fonts/Supplemental/`. `DigitFacePreference` picks the first
+available of DIN Condensed Bold, then SF Condensed Bold, then the built-in
+drum numerals — so nothing has to be installed and no font is bundled. That
+also keeps licensed faces out of the repo: Univers and Adobe's DIN are lovely
+here but cannot legally be redistributed inside a screensaver you hand to
+someone else.
+
+SF is reached through `NSFont.systemFont(ofSize:weight:)` plus a descriptor
+width trait, never by name — asking CoreText for `.SFNS-Bold` by name silently
+returns Times New Roman.
+
+The built-in alternative in `src/DrumDigits.swift` is a set of original stroked
+vector paths — the ten numerals plus the colon on a unit box, sized by a single
+stroke-weight fraction. Set `face = .drum` to use them. Whichever face is used, the window
 carries the horizontal seam where the two halves of the wheel meet, and when a
 digit changes the old one rises out of view while the new one comes up from
 below, clipped by the window.
 
 The labels use Helvetica, which ships with macOS. The prop's labels are a
 letterspaced neo-grotesque — consistent with Helvetica, though the broadcast
-source is too soft to identify it definitively. Nothing is bundled, so there is
-no font-licensing question.
+source is too soft to identify it definitively.
 
 The whole panel drifts slowly on two incommensurate periods, so a clock left on
 screen for hours isn't a burn-in risk.

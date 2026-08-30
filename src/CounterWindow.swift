@@ -22,11 +22,52 @@ enum CounterStyle {
 }
 
 /// Where the numerals come from.
-enum DigitFace {
+enum DigitFace: Equatable {
     /// Hand-built drum-counter numerals: stroked skeletons, rounded and wide.
     case drum
-    /// Outlines lifted from an installed typeface, filled.
+    /// Outlines lifted from an installed typeface, by PostScript name.
     case font(String)
+    /// The San Francisco system face, reached through the system API rather
+    /// than by name — asking CoreText for ".SFNS-Bold" by name silently hands
+    /// back Times New Roman. `width` is the descriptor width trait: 0 is
+    /// standard, -0.2 condensed, -0.4 extra compressed.
+    case system(weight: CGFloat, width: CGFloat)
+
+    /// nil when the named font isn't installed, so the caller can fall back.
+    func resolved() -> CTFont? {
+        switch self {
+        case .drum:
+            return nil
+        case .font(let name):
+            let f = CTFontCreateWithName(name as CFString, 100, nil)
+            // CoreText substitutes silently, so confirm we got what we asked for.
+            guard (CTFontCopyPostScriptName(f) as String) == name else { return nil }
+            return f
+        case .system(let weight, let width):
+            let base = NSFont.systemFont(ofSize: 100, weight: NSFont.Weight(weight))
+            guard width != 0 else { return base as CTFont }
+            // SF carries a real wdth axis on modern macOS; on older releases
+            // this resolves back to the standard width rather than failing.
+            let d = base.fontDescriptor.addingAttributes([
+                .traits: [NSFontDescriptor.TraitKey.width: width]
+            ])
+            return (NSFont(descriptor: d, size: 100) ?? base) as CTFont
+        }
+    }
+}
+
+/// Picks the numerals. Everything here ships with macOS, so friends need
+/// install nothing and the repo bundles no font — which also keeps licensed
+/// faces (Univers, Adobe's DIN) out of it entirely.
+enum DigitFacePreference {
+    static func best() -> DigitFace {
+        let candidates: [DigitFace] = [
+            .font("DINCondensed-Bold"),             // /System/Library/Fonts/Supplemental
+            .system(weight: 0.4, width: -0.2),      // SF Condensed Bold
+        ]
+        for c in candidates where c.resolved() != nil { return c }
+        return .drum
+    }
 }
 
 /// One character position on a counter drum.
@@ -147,8 +188,7 @@ final class CounterWindow {
     /// Glyph outline for `ch` normalised into a unit box, cached per face.
     private func unitPath(_ ch: Character) -> CGPath? {
         if let p = unitPaths[ch] { return p }
-        guard case .font(let name) = face else { return nil }
-        let font = CTFontCreateWithName(name as CFString, 100, nil)
+        guard let font = face.resolved() else { return nil }
 
         func outline(_ c: Character) -> CGPath? {
             var utf16 = Array(String(c).utf16)
@@ -216,7 +256,7 @@ final class CounterWindow {
                 ctx.strokePath()
             }
 
-        case .font:
+        case .font, .system:
             guard let unit = unitPath(ch) else { break }
             var t = CGAffineTransform(scaleX: cell.height, y: cell.height)
                 .concatenating(CGAffineTransform(translationX: cell.midX, y: cell.midY))

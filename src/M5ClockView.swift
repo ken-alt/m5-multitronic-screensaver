@@ -23,6 +23,7 @@ public class M5ClockView: M5PanelView {
 
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
+        shipboard.face = DigitFacePreference.best()
         shipboard.set(ShipboardClock.string(Date()), animated: false)
     }
 

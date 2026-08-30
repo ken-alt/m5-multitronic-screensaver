@@ -51,6 +51,9 @@ public class ChronometerView: ScreenSaverView {
         super.init(frame: frame, isPreview: isPreview)
         animationTimeInterval = 1.0 / 60.0
         wantsLayer = true
+        let face = DigitFacePreference.best()
+        stardate.face = face
+        shipboard.face = face
         let now = Date()
         stardate.set(Stardate.string(now), animated: false)
         shipboard.set(ShipboardClock.string(now), animated: false)
