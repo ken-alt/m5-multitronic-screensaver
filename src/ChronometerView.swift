@@ -107,8 +107,12 @@ public class ChronometerView: ScreenSaverView {
 
         let lampY = panel.maxY - panelH * 0.25
         let lampR = panelW * 0.025
-        CounterChrome.drawLamp(ctx, at: CGPoint(x: left.midX,  y: lampY), radius: lampR)
-        CounterChrome.drawLamp(ctx, at: CGPoint(x: right.midX, y: lampY), radius: lampR)
+        // The prop's indicator lamps read orange-red, so these keep that
+        // colour; the clock-only saver uses a true red.
+        CounterChrome.drawLED(ctx, at: CGPoint(x: left.midX,  y: lampY), radius: lampR,
+                              red: 0.94, green: 0.28, blue: 0.06)
+        CounterChrome.drawLED(ctx, at: CGPoint(x: right.midX, y: lampY), radius: lampR,
+                              red: 0.94, green: 0.28, blue: 0.06)
 
         stardate.draw(ctx, in: left)
         shipboard.draw(ctx, in: right)

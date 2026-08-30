@@ -140,7 +140,9 @@ correct wherever the drift puts it, and it is computed from `bounds` alone
 because it is consulted during `init`.
 
 The clock drifts too, but by a third as much as the chronometer's, since it is
-already close to a screen edge.
+already close to a screen edge. There is no label under this one — the reading
+speaks for itself — and its indicator is a true red LED, where the chronometer
+keeps the prop's orange-red.
 
 ![](m5-with-clock.png)
 

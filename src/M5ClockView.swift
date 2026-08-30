@@ -32,7 +32,7 @@ public class M5ClockView: M5PanelView {
 
     /// The clock furniture for a given drift offset. Everything is derived from
     /// `bounds`, so this is safe to call before the subclass is fully set up.
-    private func layout(offsetBy d: CGSize) -> (window: CGRect, lamp: CGPoint, lampR: CGFloat, label: CGPoint) {
+    private func layout(offsetBy d: CGSize) -> (window: CGRect, lamp: CGPoint, lampR: CGFloat) {
         let winW = min(bounds.width * 0.22, bounds.height * 0.44)
         let winH = winW / 3.33                      // the prop's window aspect
         let lampR = winH * 0.17
@@ -42,10 +42,7 @@ public class M5ClockView: M5PanelView {
         let winTop = lampY - lampR - winH * 0.34
         let window = CGRect(x: bounds.midX - winW / 2 + d.width,
                             y: winTop - winH, width: winW, height: winH)
-        return (window,
-                CGPoint(x: window.midX, y: lampY),
-                lampR,
-                CGPoint(x: window.midX, y: window.minY - winH * 0.40))
+        return (window, CGPoint(x: window.midX, y: lampY), lampR)
     }
 
     /// The full extent the clock can ever occupy, so bars keep clear of it
@@ -55,10 +52,8 @@ public class M5ClockView: M5PanelView {
         let amp = min(bounds.width, bounds.height) * M5ClockView.driftAmp
         let bezel = l.window.height * 0.16
         let region = l.window
-            .union(CGRect(x: l.lamp.x - l.lampR, y: l.lamp.y - l.lampR,
-                          width: l.lampR * 2, height: l.lampR * 2))
-            .union(CGRect(x: l.label.x - l.window.width / 2, y: l.label.y - l.window.height * 0.4,
-                          width: l.window.width, height: l.window.height * 0.8))
+            .union(CGRect(x: l.lamp.x - l.lampR * 1.3, y: l.lamp.y - l.lampR * 1.3,
+                          width: l.lampR * 2.6, height: l.lampR * 2.6))
         return region.insetBy(dx: -(amp + bezel + l.window.height * 0.35),
                               dy: -(amp + bezel + l.window.height * 0.35))
     }
@@ -90,9 +85,8 @@ public class M5ClockView: M5PanelView {
                        height: CGFloat(sin(clockDrift / 113.0 * 2 * .pi)) * amp * 0.7)
         let l = layout(offsetBy: d)
 
-        CounterChrome.drawLamp(ctx, at: l.lamp, radius: l.lampR)
+        CounterChrome.drawLED(ctx, at: l.lamp, radius: l.lampR,
+                              red: 0.93, green: 0.10, blue: 0.07)
         shipboard.draw(ctx, in: l.window)
-        CounterChrome.drawLabel(ctx, "SHIPBOARD", centeredAt: l.label,
-                                size: l.window.height * 0.30)
     }
 }
