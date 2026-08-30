@@ -57,13 +57,12 @@ All in `src/M5PanelView.m`:
 
 ## Performance
 
-CPU rasterisation of `drawRect:`, on a 1.4 GHz Core i5-8257U:
-
-| Resolution | ms/frame |
-|---|---|
-| 1440×900 | 2.9 |
-| 2560×1600 | 8.3 |
-| 3360×2100 | 14.2 |
+CPU rasterisation of `drawRect:` at 2560×1600 runs roughly 9–15 ms/frame on a
+1.4 GHz Core i5-8257U, varying with thermal state and with how much of the
+field happens to be lit — the content is random, so no two runs draw the same
+area. Swift and the original Objective-C measured within run-to-run noise of
+each other over interleaved 400-frame runs; the port was a maintainability
+change, not an optimisation.
 
 The first version composited a full-screen radial gradient for the vignette,
 which cost ~72 ms/frame at 2560×1600 on its own. Baking the falloff into each
@@ -87,6 +86,21 @@ Rosetta does not apply — an Intel `.saver` will not load into the arm64
 Moving to an Apple Silicon Mac: copy this folder over, install the Command Line
 Tools (`xcode-select --install`) if they aren't there, and run `./build.sh`.
 It detects `arm64` and sets the deployment floor to 11.0 automatically.
+
+### A Swift 5.2 landmine
+
+Written in Swift, built with `swiftc` from the Command Line Tools. One trap is
+worth recording: a **file-scope `let` with a non-trivial initialiser crashes on
+first access** once the bundle is `dlopen`'d by the screensaver host, when a
+Swift 5.2 compiler is paired with a much newer Swift runtime. The lazy
+initialisation accessor the old compiler emits does not survive the trip. It
+reproduces at every optimisation level, including `-Onone`, and lands as a
+SIGSEGV inside whatever happens to touch the global first — which makes it look
+like a bug anywhere but where it is.
+
+The same data declared as `static let` on a type is fine, so `Palette` is an
+enum namespace rather than a pair of globals. This should not bite on a modern
+toolchain, but the type-scoped form costs nothing and is portable.
 
 The animation is original code; only the look is referenced. Star Trek is a
 trademark of CBS Studios Inc.; this project is unaffiliated fan work and ships

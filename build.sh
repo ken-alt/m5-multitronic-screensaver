@@ -18,14 +18,16 @@ echo "building ${ARCH}, min macOS ${MINVER}, SDK ${SDK}"
 rm -rf build
 mkdir -p "${OUT}/Contents/MacOS" "${OUT}/Contents/Resources"
 
-clang -c src/M5PanelView.m \
+swiftc -emit-object \
   -o build/M5PanelView.o \
-  -isysroot "${SDK}" \
-  -arch "${ARCH}" \
-  -mmacosx-version-min=${MINVER} \
-  -fobjc-arc -fmodules \
-  -O2 -Wall -Wno-unused-parameter
+  src/M5PanelView.swift \
+  -sdk "${SDK}" \
+  -target "${ARCH}-apple-macosx${MINVER}" \
+  -O -wmo
 
+# Linked with clang rather than swiftc so the result is a loadable bundle
+# (MH_BUNDLE) rather than a dylib. The Swift runtime ships with macOS on
+# 10.14.4+, so only an rpath to it is needed.
 clang -bundle \
   -o "${OUT}/Contents/MacOS/${EXEC}" \
   build/M5PanelView.o \
@@ -34,7 +36,8 @@ clang -bundle \
   -mmacosx-version-min=${MINVER} \
   -framework Cocoa \
   -framework ScreenSaver \
-  -framework CoreGraphics
+  -L"${SDK}/usr/lib/swift" -L/usr/lib/swift \
+  -Xlinker -rpath -Xlinker /usr/lib/swift
 
 cp src/Info.plist "${OUT}/Contents/Info.plist"
 
