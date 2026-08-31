@@ -151,10 +151,26 @@ That is the ceiling, not a missing optimisation. Screen-clean figures at
 | Chronometer — Classic | 60.2 |
 | Chronometer — Remaster | 59.9 |
 
-The chronometer apertures are about 6.3× the area of the clock module's, and
-roughly eight passes fill that area every frame. Classic and Remaster cost the
-same within noise, which contradicts an assumption held for several rounds that
-the Classic's opaque mask made it the expensive one.
+Classic and Remaster cost the same within noise, which contradicts an
+assumption held for several rounds that the Classic's opaque mask made it the
+expensive one.
+
+### Measure before you optimise
+
+The chronometers were assumed to be slow because their apertures are ~6.3× the
+area of the clock module's. Removing every window — bezels, drum faces, digits
+and all the lighting passes — took a 59.7 ms frame only to 49.5 ms. The windows
+were never the problem.
+
+The cost was one call: the unit plate's blurred drop shadow, **32 ms of 59**.
+CoreGraphics shadows scale with area times blur radius, and blur here is
+proportional to plate height, so the chronometer's 1843×590 plate costs roughly
+nine times the clock module's. The plate never changes — it only drifts — so it
+is now rendered once and blitted, taking the chronometers to ~44 ms.
+
+Note the cached blit still costs ~17 ms of that: the image carries alpha for
+the shadow margin, so compositing it is fill-rate bound in the same way. Only
+opaque copies are genuinely cheap.
 
 Getting the chronometers inside budget means moving the compositing to the GPU
 — a `CAMetalLayer` returned from the view's backing layer, since a

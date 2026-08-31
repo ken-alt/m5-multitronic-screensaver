@@ -579,7 +579,38 @@ enum CounterChrome {
     /// The chronometer is a separate unit sunk into the screen. This is the
     /// hole it sits in and the faceplate that fills it — the screen surface
     /// overhangs the top edge and catches light along the bottom.
+    /// The plate is identical every frame — it only drifts — but it carries a
+    /// blurred drop shadow whose cost scales with area times blur radius. At
+    /// chronometer size that one call measured 32ms of a 59ms frame. Rendered
+    /// once and blitted, with margin around it for the shadow to fall into.
+    private static var plateCache: [String: CGImage] = [:]
+
     static func drawUnitPlate(_ ctx: CGContext, _ plate: CGRect, screwInset: CGFloat) {
+        let pad = (plate.height * 0.12).rounded()
+        let w = Int((plate.width + pad * 2).rounded())
+        let h = Int((plate.height + pad * 2).rounded())
+        let key = "\(w)x\(h)-\(Int(screwInset.rounded()))"
+        if let img = plateCache[key] {
+            ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
+            return
+        }
+        if w > 0, h > 0,
+           let lc = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                              bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
+            let local = CGRect(x: pad, y: pad, width: plate.width, height: plate.height)
+            drawUnitPlateDirect(lc, local, screwInset: screwInset)
+            if let img = lc.makeImage() {
+                plateCache[key] = img
+                ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
+                return
+            }
+        }
+        drawUnitPlateDirect(ctx, plate, screwInset: screwInset)
+    }
+
+    private static func drawUnitPlateDirect(_ ctx: CGContext, _ plate: CGRect,
+                                            screwInset: CGFloat) {
         let r = plate.height * 0.028
         let path = CGPath(roundedRect: plate, cornerWidth: r, cornerHeight: r, transform: nil)
 
