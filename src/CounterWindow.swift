@@ -561,10 +561,27 @@ enum CounterChrome {
         ctx.addPath(path)
         ctx.clip()
         // Faceplate: dark charcoal, very slightly lit from above.
-        if let g = grad([(0.0, grey(0.088)), (0.5, grey(0.062)), (1.0, grey(0.045))]) {
+        // Black anodised aluminium: a cool, nearly neutral dark with a satin
+        // sheen, not the warm charcoal of painted steel.
+        if let g = grad([(0.0, CGColor(red: 0.083, green: 0.085, blue: 0.092, alpha: 1)),
+                         (0.5, CGColor(red: 0.055, green: 0.057, blue: 0.063, alpha: 1)),
+                         (1.0, CGColor(red: 0.036, green: 0.037, blue: 0.042, alpha: 1))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
                                    end: CGPoint(x: plate.minX, y: plate.minY), options: [])
         }
+        // Satin sheen across the anodised face.
+        ctx.setBlendMode(.plusLighter)
+        if let g = grad([(0.0, white(0.030)), (0.45, white(0.008)), (1.0, white(0.0))]) {
+            ctx.drawRadialGradient(g,
+                                   startCenter: CGPoint(x: plate.minX + plate.width * 0.24,
+                                                        y: plate.maxY + plate.height * 0.5),
+                                   startRadius: 0,
+                                   endCenter: CGPoint(x: plate.minX + plate.width * 0.30,
+                                                      y: plate.maxY),
+                                   endRadius: plate.width * 0.62, options: [])
+        }
+        ctx.setBlendMode(.normal)
+
         // The screen overhangs the top of the recess and shades it.
         if let g = grad([(0, black(0.75)), (1, black(0))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
@@ -960,9 +977,39 @@ enum CounterChrome {
         ctx.restoreGState()
     }
 
+    /// Cut into the metal rather than printed on it: the groove reads dark,
+    /// with its far wall catching the light from above-left.
+    static func drawEtchedLabel(_ ctx: CGContext, _ text: String,
+                                centeredAt c: CGPoint, size: CGFloat) {
+        let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
+        let kern = size * 0.20
+        // Engraved and ink-filled, which is how a legend on black anodising is
+        // actually made. A bare groove is darker than the surface and vanishes
+        // against it; the ink is what carries the reading, with a shadow above
+        // and a lit lower wall giving it the recess.
+        let passes: [(CGSize, NSColor)] = [
+            (CGSize(width: -size * 0.045, height: size * 0.045),
+             NSColor(white: 0.0, alpha: 0.75)),            // shadowed near wall
+            (CGSize(width: size * 0.05, height: -size * 0.05),
+             NSColor(white: 0.72, alpha: 0.35)),           // lit far wall
+            (.zero, NSColor(white: 0.80, alpha: 0.96)),    // the ink fill
+        ]
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        for (off, col) in passes {
+            let a = NSAttributedString(string: text, attributes: [
+                .font: font, .foregroundColor: col, .kern: kern,
+            ])
+            let sz = a.size()
+            a.draw(at: NSPoint(x: c.x - (sz.width - kern) / 2 + off.width,
+                               y: c.y - sz.height / 2 + off.height))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
     /// Left-justified caption, one line per element, as panel legends are set.
     static func drawLegend(_ ctx: CGContext, _ lines: [String],
-                           leftAt p: CGPoint, size: CGFloat) {
+                           leftAt p: CGPoint, size: CGFloat, etched: Bool = false) {
         let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
         let kern = size * 0.16
         let lead = size * 1.32
@@ -970,9 +1017,22 @@ enum CounterChrome {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         for (i, line) in lines.enumerated() {
+            if etched {
+                for (dx, dy, w, a) in [(-size * 0.045, size * 0.045, CGFloat(0.0), CGFloat(0.75)),
+                                       (size * 0.05, -size * 0.05, CGFloat(0.72), CGFloat(0.35))] {
+                    let cut = NSAttributedString(string: line, attributes: [
+                        .font: font,
+                        .foregroundColor: NSColor(white: w, alpha: a),
+                        .kern: kern,
+                    ])
+                    cut.draw(at: NSPoint(x: p.x + dx,
+                                         y: top - lead * CGFloat(i) - cut.size().height / 2 + dy))
+                }
+            }
             let a = NSAttributedString(string: line, attributes: [
                 .font: font,
-                .foregroundColor: NSColor(cgColor: CounterStyle.label) ?? .white,
+                .foregroundColor: etched ? NSColor(white: 0.80, alpha: 0.96)
+                                         : (NSColor(cgColor: CounterStyle.label) ?? .white),
                 .kern: kern,
             ])
             a.draw(at: NSPoint(x: p.x, y: top - lead * CGFloat(i) - a.size().height / 2))

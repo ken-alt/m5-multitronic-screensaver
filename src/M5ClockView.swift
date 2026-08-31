@@ -177,10 +177,10 @@ public class M5ClockView: M5PanelView {
                 let minW = CounterChrome.labelWidth("MIN", size: labelSize)
                 CounterChrome.drawLED(ctx, at: CGPoint(x: r.midX, y: lampY), radius: lampR,
                                       red: 0.95, green: 0.13, blue: 0.08)
-                CounterChrome.drawLabel(ctx, "HRS",
+                CounterChrome.drawEtchedLabel(ctx, "HRS",
                                         centeredAt: CGPoint(x: r.midX - lampR - clear - hrsW / 2, y: lampY),
                                         size: labelSize)
-                CounterChrome.drawLabel(ctx, "MIN",
+                CounterChrome.drawEtchedLabel(ctx, "MIN",
                                         centeredAt: CGPoint(x: r.midX + lampR + clear + minW / 2, y: lampY),
                                         size: labelSize)
             case 1:
@@ -189,7 +189,7 @@ public class M5ClockView: M5PanelView {
                 let lampX = r.midX - groupW / 2 + lampR
                 CounterChrome.drawLED(ctx, at: CGPoint(x: lampX, y: lampY),
                                       radius: lampR, red: 0.95, green: 0.13, blue: 0.08)
-                CounterChrome.drawLabel(ctx, "SEC",
+                CounterChrome.drawEtchedLabel(ctx, "SEC",
                                         centeredAt: CGPoint(x: lampX + lampR + clear + secW / 2, y: lampY),
                                         size: labelSize)
             default:
@@ -205,6 +205,6 @@ public class M5ClockView: M5PanelView {
         Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowMidY), scale: togS)
         CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
                                  leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowMidY),
-                                 size: capSize)
+                                 size: capSize, etched: true)
     }
 }
