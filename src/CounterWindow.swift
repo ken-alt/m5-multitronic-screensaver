@@ -111,7 +111,9 @@ final class CounterWindow {
     /// it, an equal-width window holding two characters draws them far larger
     /// than one holding five.
     var finish: CounterFinish = .modern {
-        didSet { rollDuration = (finish == .retro) ? 0.30 : 0.20 }
+        // 0.50s is thirty frames at 60fps for the wheel to turn through; the
+        // emissive readout only has to transition.
+        didSet { rollDuration = (finish == .retro) ? 0.50 : 0.20 }
     }
 
     var fixedPitch: CGFloat?
@@ -272,8 +274,6 @@ final class CounterWindow {
             if slot.roll >= 1 {
                 drawGlyph(ctx, slot.current, in: cell, collecting: lit)
             } else {
-                let e = CGFloat(easeInOutCubic(slot.roll))
-
                 if finish == .retro {
                     // A physical wheel turns, so the numerals travel on an arc:
                     // vertical position follows sin, apparent height follows
@@ -286,6 +286,13 @@ final class CounterWindow {
                     // sliding distance both digits were off the ends at the
                     // halfway point and the middle went empty. Adjacent
                     // numerals sit about one digit height apart on a real wheel.
+                    // Linear in angle: the wheel turns at a constant rate and the
+                    // sin mapping supplies the easing on its own. Driving it
+                    // with a cubic ease as well compounds the two, leaving the
+                    // digit nearly still for the first and last quarter and
+                    // flicking through the middle — which reads as a bounce
+                    // rather than a roll.
+                    let e = CGFloat(slot.roll)
                     let travel = digitH * 1.02
                     let sweep: CGFloat = 1.16              // radians either side
                     for (ch, theta) in [(slot.previous, e * sweep),
@@ -295,6 +302,8 @@ final class CounterWindow {
                                   squash: max(0.10, cos(theta)), collecting: lit)
                     }
                 } else {
+                    // No arc here, so the slide carries its own easing.
+                    let e = CGFloat(easeInOutCubic(slot.roll))
                     // The remastered readout is emissive — a lit display with
                     // no wheel behind it — so the numerals translate rather
                     // than turn. Nothing rotates, so nothing foreshortens.
