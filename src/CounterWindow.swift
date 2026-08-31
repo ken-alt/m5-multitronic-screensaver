@@ -92,6 +92,19 @@ final class CounterWindow {
     /// than one holding five.
     var fixedPitch: CGFloat?
 
+    /// When set, overrides the glyph height. The fit cap below is computed per
+    /// window from its own widest character, so a window holding "M" would
+    /// otherwise draw smaller than one holding only digits.
+    var fixedDigitHeight: CGFloat?
+
+    /// How much of a cell the widest character may occupy. Fitting it exactly
+    /// leaves it touching the drum bounds while narrower glyphs sit clear.
+    static let glyphFit: CGFloat = 0.86
+
+    /// False when the whole reading rides one wheel — the meridiem is a single
+    /// drum showing a word, so it gets no break through the middle.
+    var splitsBetweenCharacters = true
+
     var face: DigitFace = .drum {
         didSet { unitPaths.removeAll() }
     }
@@ -144,15 +157,15 @@ final class CounterWindow {
         // mechanism entirely.
         ctx.setBlendMode(.normal)
 
+        CounterChrome.drawLetterbox(ctx, in: win)
         CounterChrome.drawGloss(ctx, in: win)
         CounterChrome.drawInnerShadow(ctx, in: win)
     }
 
-    /// Fixed pitch, as a counter is — but the punctuation gets a narrow cell.
-    static func advanceWidth(_ c: Character) -> CGFloat {
-        if c == "." || c == ":" { return 0.45 }
-        return c.isLetter ? 0.92 : 1.0
-    }
+    /// One cell per character, all the same width. Every character rides its
+    /// own drum on a real counter, and the drums are identical — so narrowing
+    /// the punctuation would be wrong as well as uneven.
+    static func advanceWidth(_ c: Character) -> CGFloat { return 1.0 }
     private func advanceWidth(_ c: Character) -> CGFloat { return CounterWindow.advanceWidth(c) }
 
     /// Space between cells, in cell widths.
@@ -192,15 +205,20 @@ final class CounterWindow {
         let pitch = fixedPitch ?? (inner.width / (units + gap * CGFloat(slots.count - 1)))
         // Cap the glyph height so the widest character still fits its cell.
         var digitH = win.height * 0.60
-        let ratio = widestGlyphRatio()
-        if ratio > 0 { digitH = min(digitH, pitch / ratio) }
+        if let forced = fixedDigitHeight {
+            digitH = forced
+        } else {
+            let ratio = widestGlyphRatio()
+            if ratio > 0 { digitH = min(digitH, pitch * CounterWindow.glyphFit / ratio) }
+        }
         let digitY = win.midY - digitH / 2
 
         // Centre the reading in the aperture: with every window the same size,
         // a two-character reading would otherwise sit hard against the left.
         let readingW = pitch * units + pitch * gap * CGFloat(max(0, slots.count - 1))
+        var boundaries: [CGFloat] = []
         var x = inner.minX + max(0, inner.width - readingW) / 2
-        for slot in slots {
+        for (slotIndex, slot) in slots.enumerated() {
             let cellW = pitch * advanceWidth(slot.current)
             let cell = CGRect(x: x, y: digitY, width: cellW, height: digitH)
 
@@ -234,8 +252,30 @@ final class CounterWindow {
             }
             ctx.restoreGState()
 
+            // Bound every drum on both sides, so the outer wheels are the
+            // same width as the inner ones rather than running to the edge.
+            let edge = pitch * gap * (splitsBetweenCharacters ? 0.5 : 1.1)
+            if slotIndex == 0 { boundaries.append(x - edge) }
+            if slotIndex == slots.count - 1 {
+                boundaries.append(x + cellW + edge)
+            } else if splitsBetweenCharacters {
+                boundaries.append(x + cellW + pitch * gap * 0.5)
+            }
             x += cellW + pitch * gap
         }
+
+        // Each character rides its own wheel, so there is a physical break
+        // between them. A thin dark line reads as the gap between drums.
+        ctx.saveGState()
+        CounterChrome.clipApertureFor(ctx, win)
+        ctx.setBlendMode(.normal)
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.72))
+        let sepW = max(1, win.height * 0.014)
+        for bx in boundaries {
+            ctx.fill(CGRect(x: bx - sepW / 2, y: win.minY, width: sepW, height: win.height))
+        }
+        ctx.restoreGState()
+
         return lit
     }
 
@@ -243,7 +283,7 @@ final class CounterWindow {
     /// height. Glyph size follows the aperture height while cell width follows
     /// the pitch, so without this the two can disagree and the reading spills
     /// out of its cells.
-    private func widestGlyphRatio() -> CGFloat {
+    func widestGlyphRatio() -> CGFloat {
         var widest: CGFloat = 0
         for slot in slots {
             guard let p = unitPath(slot.current) else { continue }
@@ -294,11 +334,7 @@ final class CounterWindow {
             if ch == ":" {
                 path = DrumDigits.colonPath(in: cell)
             } else {
-                let s = cell.width * 0.46
-                let r = s * 0.3
-                path = CGPath(roundedRect: CGRect(x: cell.midX - s / 2, y: cell.minY,
-                                                  width: s, height: s),
-                              cornerWidth: r, cornerHeight: r, transform: nil)
+                path = DrumDigits.dotPath(in: cell)
             }
             for (_, alpha) in CounterStyle.bloom {
                 ctx.setFillColor(CGColor(red: a.r, green: a.g, blue: a.b, alpha: alpha))
@@ -385,6 +421,9 @@ enum CounterChrome {
     static func aperture(_ win: CGRect) -> CGPath {
         let r = apertureRadius(win)
         return CGPath(roundedRect: win, cornerWidth: r, cornerHeight: r, transform: nil)
+    }
+    static func clipApertureFor(_ ctx: CGContext, _ win: CGRect) {
+        clipAperture(ctx, win)
     }
     private static func clipAperture(_ ctx: CGContext, _ win: CGRect) {
         ctx.addPath(aperture(win))
@@ -613,6 +652,25 @@ enum CounterChrome {
                                    end: CGPoint(x: win.minX, y: win.maxY - reach), options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
                                    end: CGPoint(x: win.minX, y: win.minY + reach), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// The aperture is a slot onto a cylinder, not a flat panel: above and
+    /// below the lit slice the drum curves away out of sight. Without these
+    /// bands the surface reads as a rectangle of grey behind a frame.
+    static func drawLetterbox(_ ctx: CGContext, in win: CGRect) {
+        let band = win.height * 0.17
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        // Not quite black — a cylinder turning away still catches a little.
+        let deep = CGColor(red: 0.030, green: 0.026, blue: 0.020, alpha: 1.0)
+        let fade = CGColor(red: 0.030, green: 0.026, blue: 0.020, alpha: 0.0)
+        if let g = grad([(0.0, deep), (0.62, deep), (1.0, fade)]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.maxY - band), options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
+                                   end: CGPoint(x: win.minX, y: win.minY + band), options: [])
         }
         ctx.restoreGState()
     }

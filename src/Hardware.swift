@@ -243,8 +243,8 @@ enum Hardware {
             }
             NSGraphicsContext.restoreGraphicsState()
         }
-        stamped("ON",  cy: H * 0.845, size: W * 0.36)
-        stamped("OFF", cy: H * 0.150, size: W * 0.36)
+        stamped("ON",  cy: H * 0.845, size: W * 0.26)
+        stamped("OFF", cy: H * 0.150, size: W * 0.26)
 
         // Hex nut across the waist, points overhanging the plate.
         let nutR = W * 0.49

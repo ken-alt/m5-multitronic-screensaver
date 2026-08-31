@@ -108,15 +108,21 @@ enum DrumDigits {
         return p
     }
 
-    /// The colon between hour/minute/second groups: two square-ish dots.
+    /// The colon: two round dots. Sized from the cell height rather than its
+    /// width, so it stays a dot when the cells are wide.
     static func colonPath(in box: CGRect) -> CGPath {
         let p = CGMutablePath()
-        let s = box.width * 0.46
-        let r = s * 0.3
-        for cy in [box.minY + box.height * 0.30, box.minY + box.height * 0.68] {
-            let rect = CGRect(x: box.midX - s / 2, y: cy - s / 2, width: s, height: s)
-            p.addRoundedRect(in: rect, cornerWidth: r, cornerHeight: r)
+        let d = box.height * 0.155
+        for cy in [box.minY + box.height * 0.30, box.minY + box.height * 0.70] {
+            p.addEllipse(in: CGRect(x: box.midX - d / 2, y: cy - d / 2, width: d, height: d))
         }
         return p
+    }
+
+    /// A single round dot, for the stardate's decimal point.
+    static func dotPath(in box: CGRect) -> CGPath {
+        let d = box.height * 0.155
+        return CGPath(ellipseIn: CGRect(x: box.midX - d / 2, y: box.minY + d * 0.1,
+                                        width: d, height: d), transform: nil)
     }
 }

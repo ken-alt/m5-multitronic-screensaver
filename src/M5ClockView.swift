@@ -125,7 +125,7 @@ public class M5ClockView: M5PanelView {
         // The switch shares the readout row rather than taking a second one.
         // Sized by height: the plate is 2.35x as tall as it is wide.
         let togS = winH * 0.55
-        let capSize = winH * 0.28
+        let capSize = winH * 0.185
         let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
                        CounterChrome.labelWidth("SWITCH", size: capSize))
         let capClear = togS * 0.42
@@ -143,11 +143,23 @@ public class M5ClockView: M5PanelView {
         let lampY = p.maxY - p.height * 0.155
         let labelSize = p.height * 0.068
 
+        // One glyph height for all three: take the widest character anywhere in
+        // the reading, so the sections cannot disagree on size.
+        var widestRatio: CGFloat = 0
+        for (i, _) in texts.enumerated() {
+            windows[i].fixedPitch = pitch
+            widestRatio = max(widestRatio, windows[i].widestGlyphRatio())
+        }
+        let digitH = widestRatio > 0
+            ? min(winH * 0.60, pitch * CounterWindow.glyphFit / widestRatio)
+            : winH * 0.60
+        for w in windows { w.fixedDigitHeight = digitH }
+        meridiem.splitsBetweenCharacters = false
+
         let groupW = eachW * CGFloat(texts.count) + gaps + togSlot
         var x = p.midX - groupW / 2
         for (i, text) in texts.enumerated() {
             let r = CGRect(x: x, y: winY, width: eachW, height: winH)
-            windows[i].fixedPitch = pitch
             windows[i].draw(ctx, in: r)
 
             // The prop puts the lamps inline with the captions rather than one
