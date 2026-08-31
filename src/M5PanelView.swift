@@ -449,8 +449,11 @@ public class M5PanelView: ScreenSaverView {
         // core. plusLighter is saturating addition, so the three are
         // order-independent and can all be laid down in one visit to the bar —
         // no need for three passes over the whole array to get the core on top.
-        let widthMul: [CGFloat] = [4.6, 2.5, 1.0]
-        let alphaMul: [CGFloat] = [0.115, 0.25, 0.95]
+        // A smooth falloff. Three widely-spaced passes leave the outermost
+        // one with a hard boundary, which reads as an outline drawn around the
+        // glow rather than as diffusion; more, closer steps blend away.
+        let widthMul: [CGFloat] = [5.4, 4.1, 3.0, 2.1, 1.45, 1.0]
+        let alphaMul: [CGFloat] = [0.020, 0.030, 0.048, 0.075, 0.125, 0.92]
 
         for bar in bars {
             let (len, alpha) = barState(bar)
@@ -466,7 +469,7 @@ public class M5PanelView: ScreenSaverView {
             let end = CGPoint(x: bar.x + (bar.vertical ? 0 : len * bar.dir),
                               y: bar.y + (bar.vertical ? len * bar.dir : 0))
 
-            for pass in 0 ..< 3 {
+            for pass in widthMul.indices {
                 ctx.setStrokeColor(red: c.r, green: c.g, blue: c.b, alpha: a * alphaMul[pass])
                 ctx.setLineWidth(bar.thickness * (1.0 + (widthMul[pass] - 1.0) * tight))
                 ctx.move(to: start)

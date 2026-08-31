@@ -21,6 +21,9 @@ public class M5ClockView: M5PanelView {
     private var clockTime: TimeInterval = 0
     private var clockDrift: Double = 0
 
+    /// Aperture proportion: wide rather than square, as on the prop.
+    private static let windowAspect: CGFloat = 2.2
+
     /// How far the module wanders, as a fraction of the smaller screen
     /// dimension. Small, because it is already close to an edge.
     private static let driftAmp: CGFloat = 0.010
@@ -42,8 +45,8 @@ public class M5ClockView: M5PanelView {
     /// The module plate for a given drift offset. Derived from `bounds` only,
     /// so it is safe to call before the subclass is fully set up.
     private func plate(offsetBy d: CGSize) -> CGRect {
-        let w = min(bounds.width * 0.275, bounds.height * 0.54)
-        let h = w * 0.44
+        let w = min(bounds.width * 0.340, bounds.height * 0.68)
+        let h = w * 0.235
         return CGRect(x: bounds.midX - w / 2 + d.width,
                       y: bounds.maxY - h - bounds.height * 0.055 + d.height,
                       width: w, height: h)
@@ -120,22 +123,31 @@ public class M5ClockView: M5PanelView {
         // One digit pitch across all three, so the widths follow real content
         // rather than character count and the drums look like one instrument.
         // The switch shares the readout row rather than taking a second one.
-        let togS = winH * 0.72
-        let togSlot = togS + gap
+        // Sized by height: the plate is 2.35x as tall as it is wide.
+        let togS = winH * 0.55
+        let capSize = winH * 0.28
+        let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
+                       CounterChrome.labelWidth("SWITCH", size: capSize))
+        let capClear = togS * 0.42
+        let togSlot = togS + capClear + capW + gap
 
-        let totalUnits = texts.reduce(CGFloat(0)) { $0 + CounterWindow.units(for: $1) }
-        let totalPad = CGFloat(texts.count) * 2 * winH * CounterWindow.padFraction
+        // Every window the same size and a chosen proportion. Dividing up
+        // whatever space is left over gives the apertures an arbitrary shape —
+        // that is how they ended up nearly square.
+        let eachW = winH * M5ClockView.windowAspect
+        let widestUnits = texts.reduce(CGFloat(0)) { max($0, CounterWindow.units(for: $1)) }
         let gaps = gap * CGFloat(texts.count - 1)
-        let pitch = max(1, (content - togSlot - gaps - totalPad) / max(1, totalUnits))
+        let pitch = max(1, (eachW - 2 * winH * CounterWindow.padFraction) / max(1, widestUnits))
 
-        let lampR = p.height * 0.043
+        let lampR = p.height * 0.036
         let lampY = p.maxY - p.height * 0.155
-        let labelSize = p.height * 0.082
+        let labelSize = p.height * 0.068
 
-        var x = p.midX - content / 2
+        let groupW = eachW * CGFloat(texts.count) + gaps + togSlot
+        var x = p.midX - groupW / 2
         for (i, text) in texts.enumerated() {
-            let w = CounterWindow.apertureWidth(for: text, pitch: pitch, height: winH)
-            let r = CGRect(x: x, y: winY, width: w, height: winH)
+            let r = CGRect(x: x, y: winY, width: eachW, height: winH)
+            windows[i].fixedPitch = pitch
             windows[i].draw(ctx, in: r)
 
             // The prop puts the lamps inline with the captions rather than one
@@ -168,15 +180,16 @@ public class M5ClockView: M5PanelView {
             default:
                 break
             }
-            x += w + gap
+            x += eachW + gap
         }
 
-        // Light switch alongside the readouts, captioned on the panel as on
-        // the prop. A static fitting, like the screws — not a control.
-        let togX = p.midX + content / 2 - togS / 2
-        Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: winY + winH / 2), scale: togS)
-        CounterChrome.drawLabel(ctx, "LIGHT",
-                                centeredAt: CGPoint(x: togX, y: p.minY + p.height * 0.175),
-                                size: p.height * 0.062)
+        // Light switch alongside the readouts, legend set to its right in two
+        // lines as on the prop. A static fitting, like the screws.
+        let togX = p.midX + groupW / 2 - togSlot + gap + togS / 2
+        let rowMidY = winY + winH / 2
+        Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowMidY), scale: togS)
+        CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
+                                 leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowMidY),
+                                 size: capSize)
     }
 }

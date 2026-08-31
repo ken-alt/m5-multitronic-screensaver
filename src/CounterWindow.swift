@@ -12,7 +12,9 @@ import CoreText
 // Type-scoped rather than file-scope globals on purpose — see the README note
 // about file-scope `let` crashing once the bundle is dlopen'd.
 enum CounterStyle {
-    static let windowFill = CGColor(red: 0.020, green: 0.017, blue: 0.014, alpha: 1)
+    /// The drum is a physical surface, so it is a dark warm grey rather than
+    /// black. Against black the numerals just float.
+    static let windowFill = CGColor(red: 0.118, green: 0.101, blue: 0.076, alpha: 1)
     static let amber      = (r: CGFloat(0.965), g: CGFloat(0.820), b: CGFloat(0.290))
     static let label      = CGColor(red: 0.87, green: 0.87, blue: 0.855, alpha: 1)
 
@@ -83,6 +85,12 @@ final class CounterWindow {
     /// Seconds for a digit to roll over. At 60fps this is ~12 frames, enough
     /// to read as a wheel turning rather than a snap.
     var rollDuration: Double = 0.20
+
+    /// When set, the reading uses this cell pitch instead of scaling to fill
+    /// its own aperture, so several windows can share one digit size. Without
+    /// it, an equal-width window holding two characters draws them far larger
+    /// than one holding five.
+    var fixedPitch: CGFloat?
 
     var face: DigitFace = .drum {
         didSet { unitPaths.removeAll() }
@@ -181,14 +189,17 @@ final class CounterWindow {
         let inner = win.insetBy(dx: padX, dy: 0)
         let units = slots.reduce(CGFloat(0)) { $0 + advanceWidth($1.current) }
         let gap = CounterWindow.cellGap
-        let pitch = inner.width / (units + gap * CGFloat(slots.count - 1))
+        let pitch = fixedPitch ?? (inner.width / (units + gap * CGFloat(slots.count - 1)))
         // Cap the glyph height so the widest character still fits its cell.
         var digitH = win.height * 0.60
         let ratio = widestGlyphRatio()
         if ratio > 0 { digitH = min(digitH, pitch / ratio) }
         let digitY = win.midY - digitH / 2
 
-        var x = inner.minX
+        // Centre the reading in the aperture: with every window the same size,
+        // a two-character reading would otherwise sit hard against the left.
+        let readingW = pitch * units + pitch * gap * CGFloat(max(0, slots.count - 1))
+        var x = inner.minX + max(0, inner.width - readingW) / 2
         for slot in slots {
             let cellW = pitch * advanceWidth(slot.current)
             let cell = CGRect(x: x, y: digitY, width: cellW, height: digitH)
@@ -211,7 +222,11 @@ final class CounterWindow {
                 // digit height, not the window height — on a real drum the
                 // next number sits right behind the last.
                 let p = CGFloat(easeInOutCubic(slot.roll))
-                let travel = digitH * 1.30
+                // Far enough that the outgoing digit has cleared the aperture
+                // before the incoming one is fully in. Keying this to digit
+                // height alone breaks once the glyphs are small relative to the
+                // window: both readings end up visible, stacked.
+                let travel = max(digitH * 1.30, (win.height + digitH) * 0.5)
                 drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * p),
                           collecting: lit)
                 drawGlyph(ctx, slot.current,  in: cell.offsetBy(dx: 0, dy: -travel * (1 - p)),
@@ -688,6 +703,26 @@ enum CounterChrome {
                                    endCenter: sc, endRadius: r * 0.44, options: [])
         }
         ctx.restoreGState()
+    }
+
+    /// Left-justified caption, one line per element, as panel legends are set.
+    static func drawLegend(_ ctx: CGContext, _ lines: [String],
+                           leftAt p: CGPoint, size: CGFloat) {
+        let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
+        let kern = size * 0.16
+        let lead = size * 1.32
+        let top = p.y + lead * CGFloat(lines.count - 1) / 2
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        for (i, line) in lines.enumerated() {
+            let a = NSAttributedString(string: line, attributes: [
+                .font: font,
+                .foregroundColor: NSColor(cgColor: CounterStyle.label) ?? .white,
+                .kern: kern,
+            ])
+            a.draw(at: NSPoint(x: p.x, y: top - lead * CGFloat(i) - a.size().height / 2))
+        }
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     /// Rendered width of a label, so callers can space things against the real

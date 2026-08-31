@@ -171,17 +171,15 @@ enum Hardware {
     /// frame.
     private static var toggleCache: [Int: CGImage] = [:]
 
-    /// Image proportions: a little taller than wide, the nut low and the lever
-    /// rising out of it.
-    static let toggleAspect: CGFloat = 1.18
+    /// Image proportions: a tall mounting plate with the nut across its waist.
+    static let toggleAspect: CGFloat = 2.35
 
-    /// A bat-handle toggle as it appears on the prop: a chrome hex nut set into
-    /// the panel with a ball-tipped lever thrown up out of it. No ON/OFF
-    /// escutcheon — on the show the caption is printed on the panel alongside,
-    /// and the stamped plate is what forced the fitting to be large.
+    /// A bat-handle toggle on its mounting plate: ON stamped at the top, OFF at
+    /// the bottom, a hex nut across the waist whose points stand out past the
+    /// plate edges, and a ball-tipped lever thrown up out of the bushing.
     static func drawToggle(_ ctx: CGContext, at c: CGPoint, scale s: CGFloat,
                            thrownUp: Bool = true) {
-        let px = max(20, Int((s * 3.0).rounded()))
+        let px = max(24, Int((s * 3.0).rounded()))
         let img: CGImage
         if let cached = toggleCache[px] {
             img = cached
@@ -204,29 +202,63 @@ enum Hardware {
                                   bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
         else { return nil }
 
-        let nutC = CGPoint(x: W / 2, y: H * 0.36)
-        let nutR = W * 0.46
+        let mid = CGPoint(x: W / 2, y: H / 2)
 
-        // The panel opening the bushing passes through.
+        // Mounting plate. Narrower than the image so the nut can overhang it.
+        let plate = CGRect(x: W * 0.17, y: H * 0.015, width: W * 0.66, height: H * 0.97)
+        let pr = plate.width * 0.46
         ctx.saveGState()
-        if let g = grad([(0.0, black(0.55)), (1.0, black(0.0))]) {
-            ctx.drawRadialGradient(g, startCenter: nutC, startRadius: nutR * 0.9,
-                                   endCenter: nutC, endRadius: nutR * 1.45, options: [])
+        ctx.setShadow(offset: CGSize(width: W * 0.035, height: -W * 0.06),
+                      blur: W * 0.14, color: black(0.85))
+        ctx.addPath(CGPath(roundedRect: plate, cornerWidth: pr, cornerHeight: pr, transform: nil))
+        ctx.setFillColor(steel(0.26))
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: plate, cornerWidth: pr, cornerHeight: pr, transform: nil))
+        ctx.clip()
+        if let g = grad([(0.00, steel(0.40)), (0.22, steel(0.27)), (0.50, steel(0.20)),
+                         (0.78, steel(0.26)), (1.00, steel(0.36))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
+                                   end: CGPoint(x: plate.minX, y: plate.minY), options: [])
         }
         ctx.restoreGState()
 
-        // Hex nut, flats catching the light differently around the turn.
+        // ON / OFF, raised off the plate: a light face with a dark edge beneath.
+        func stamped(_ text: String, cy: CGFloat, size: CGFloat) {
+            let font = NSFont(name: "Helvetica-Bold", size: size) ?? .boldSystemFont(ofSize: size)
+            let passes: [(CGFloat, NSColor)] = [
+                (-size * 0.06, NSColor(white: 0.04, alpha: 0.85)),   // shadow under the relief
+                (0.0, NSColor(white: 0.78, alpha: 0.95)),            // the raised face
+            ]
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            for (dy, col) in passes {
+                let a = NSAttributedString(string: text, attributes: [
+                    .font: font, .foregroundColor: col, .kern: size * 0.04,
+                ])
+                let sz = a.size()
+                a.draw(at: NSPoint(x: mid.x - sz.width / 2, y: cy - sz.height / 2 + dy))
+            }
+            NSGraphicsContext.restoreGraphicsState()
+        }
+        stamped("ON",  cy: H * 0.845, size: W * 0.36)
+        stamped("OFF", cy: H * 0.150, size: W * 0.36)
+
+        // Hex nut across the waist, points overhanging the plate.
+        let nutR = W * 0.49
         let hex = CGMutablePath()
         for k in 0 ..< 6 {
-            let a = CGFloat(k) / 6 * .pi * 2 + .pi / 6
-            let p = CGPoint(x: nutC.x + cos(a) * nutR, y: nutC.y + sin(a) * nutR * 0.94)
+            let a = CGFloat(k) / 6 * .pi * 2
+            let p = CGPoint(x: mid.x + cos(a) * nutR, y: mid.y + sin(a) * nutR * 0.86)
             if k == 0 { hex.move(to: p) } else { hex.addLine(to: p) }
         }
         hex.closeSubpath()
 
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: W * 0.03, height: -W * 0.05),
-                      blur: W * 0.09, color: black(0.8))
+                      blur: W * 0.10, color: black(0.8))
         ctx.addPath(hex)
         ctx.setFillColor(steel(0.5))
         ctx.fillPath()
@@ -235,54 +267,52 @@ enum Hardware {
         ctx.saveGState()
         ctx.addPath(hex)
         ctx.clip()
-        if let g = grad([(0.00, steel(0.88)), (0.24, steel(0.62)), (0.46, steel(0.78)),
-                         (0.66, steel(0.44)), (0.86, steel(0.58)), (1.00, steel(0.28))]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: nutC.x - nutR, y: nutC.y + nutR),
-                                   end: CGPoint(x: nutC.x + nutR, y: nutC.y - nutR), options: [])
+        if let g = grad([(0.00, steel(0.86)), (0.22, steel(0.58)), (0.44, steel(0.76)),
+                         (0.64, steel(0.42)), (0.84, steel(0.56)), (1.00, steel(0.26))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: mid.x - nutR, y: mid.y + nutR),
+                                   end: CGPoint(x: mid.x + nutR, y: mid.y - nutR), options: [])
         }
         ctx.restoreGState()
 
-        // Bushing collar inside the nut.
+        // Bushing, then the dark recess the lever comes out of.
         ctx.saveGState()
-        let br = W * 0.29
-        ctx.addEllipse(in: CGRect(x: nutC.x - br, y: nutC.y - br * 0.94,
-                                  width: br * 2, height: br * 1.88))
+        let br = W * 0.31
+        ctx.addEllipse(in: CGRect(x: mid.x - br, y: mid.y - br * 0.92,
+                                  width: br * 2, height: br * 1.84))
         ctx.clip()
-        if let g = grad([(0.0, steel(0.74)), (0.5, steel(0.40)), (1.0, steel(0.16))]) {
-            ctx.drawRadialGradient(g, startCenter: CGPoint(x: nutC.x - br * 0.4, y: nutC.y + br * 0.4),
-                                   startRadius: 0, endCenter: nutC, endRadius: br, options: [])
+        if let g = grad([(0.0, steel(0.78)), (0.5, steel(0.42)), (1.0, steel(0.16))]) {
+            ctx.drawRadialGradient(g, startCenter: CGPoint(x: mid.x - br * 0.4, y: mid.y + br * 0.4),
+                                   startRadius: 0, endCenter: mid, endRadius: br, options: [])
         }
         ctx.restoreGState()
-
-        // The dark recess the lever emerges from.
         ctx.saveGState()
-        let rr = W * 0.185
-        ctx.addEllipse(in: CGRect(x: nutC.x - rr, y: nutC.y - rr * 0.9,
+        let rr = W * 0.20
+        ctx.addEllipse(in: CGRect(x: mid.x - rr, y: mid.y - rr * 0.9,
                                   width: rr * 2, height: rr * 1.8))
         ctx.clip()
-        if let g = grad([(0.0, black(0.95)), (1.0, steel(0.22))]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: nutC.x, y: nutC.y + rr),
-                                   end: CGPoint(x: nutC.x, y: nutC.y - rr), options: [])
+        if let g = grad([(0.0, black(0.95)), (1.0, steel(0.24))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: mid.x, y: mid.y + rr),
+                                   end: CGPoint(x: mid.x, y: mid.y - rr), options: [])
         }
         ctx.restoreGState()
 
-        // Lever thrown up, foreshortened, with a ball tip.
-        let ballC = CGPoint(x: nutC.x + W * 0.02, y: nutC.y + W * 0.40)
+        // Lever thrown up, with a ball tip.
+        let ballC = CGPoint(x: mid.x, y: mid.y + W * 0.36)
         ctx.saveGState()
         ctx.setLineCap(.round)
         ctx.setStrokeColor(steel(0.44))
-        ctx.setLineWidth(W * 0.215)
-        ctx.move(to: nutC)
+        ctx.setLineWidth(W * 0.22)
+        ctx.move(to: mid)
         ctx.addLine(to: ballC)
         ctx.strokePath()
-        ctx.setStrokeColor(white(0.34))
+        ctx.setStrokeColor(white(0.32))
         ctx.setLineWidth(W * 0.055)
-        ctx.move(to: CGPoint(x: nutC.x - W * 0.045, y: nutC.y))
+        ctx.move(to: CGPoint(x: mid.x - W * 0.045, y: mid.y))
         ctx.addLine(to: CGPoint(x: ballC.x - W * 0.045, y: ballC.y - W * 0.04))
         ctx.strokePath()
         ctx.restoreGState()
 
-        let ballR = W * 0.235
+        let ballR = W * 0.245
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: W * 0.035, height: -W * 0.05),
                       blur: W * 0.08, color: black(0.75))
@@ -295,7 +325,7 @@ enum Hardware {
                                   width: ballR * 2, height: ballR * 2))
         ctx.clip()
         if let g = grad([(0.0, steel(0.97)), (0.40, steel(0.66)),
-                         (0.78, steel(0.28)), (1.0, steel(0.44))]) {
+                         (0.78, steel(0.28)), (1.0, steel(0.46))]) {
             ctx.drawRadialGradient(g,
                                    startCenter: CGPoint(x: ballC.x - ballR * 0.36,
                                                         y: ballC.y + ballR * 0.38),
