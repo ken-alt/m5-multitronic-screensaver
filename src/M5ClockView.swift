@@ -114,7 +114,6 @@ public class M5ClockView: M5PanelView {
         // labels and lamps 0.10-0.22, apertures 0.30-0.70.
         let winH = p.height * 0.40
         let winY = p.maxY - p.height * 0.70
-        let content = p.width * 0.88
         let bezelW = CounterChrome.bezelSideWidth(forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
         let gap = bezelW * 2 + winH * 0.16
 
@@ -165,7 +164,7 @@ public class M5ClockView: M5PanelView {
 
         let groupW = eachW * CGFloat(texts.count) + gaps + togSlot
         var x = p.midX - groupW / 2
-        for (i, text) in texts.enumerated() {
+        for i in texts.indices {
             let r = CGRect(x: x, y: winY, width: eachW, height: winH)
             windows[i].draw(ctx, in: r)
 

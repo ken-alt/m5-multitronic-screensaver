@@ -172,9 +172,6 @@ final class CounterWindow {
     /// behind. Lamps sit just inside the top and bottom of the opening and
     /// wash across the drum, the way a speedometer is lit.
     func draw(_ ctx: CGContext, in win: CGRect) {
-        let bezelW = CounterChrome.bezelWidth(forAperture: win)
-        let outer = win.insetBy(dx: -CounterChrome.bezelSideWidth(forAperture: win), dy: -bezelW)
-
         CounterChrome.drawBezel(ctx, around: win, finish: finish)
         CounterChrome.drawDrumFace(ctx, in: win, finish: finish)
 

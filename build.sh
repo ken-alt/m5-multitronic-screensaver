@@ -1,16 +1,16 @@
 #!/bin/bash
-# Builds both screensavers from src/ using the Command Line Tools.
+# Builds the screen savers from src/. Requires Xcode (not just the Command Line
+# Tools) for a current SDK and the Metal toolchain.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
 SDK="$(xcrun --show-sdk-path)"
+MINVER=15.0
+ARCHS="x86_64 arm64"
 
-# Build for the host architecture. arm64 macOS starts at 11.0, so the
-# 10.15 floor is only valid on Intel.
-ARCH="$(uname -m)"
-if [ "${ARCH}" = "arm64" ]; then MINVER=11.0; else MINVER=10.15; fi
-echo "building ${ARCH}, min macOS ${MINVER}, SDK ${SDK}"
+echo "building universal (${ARCHS}), min macOS ${MINVER}"
+echo "SDK ${SDK}"
 
 rm -rf build
 mkdir -p build
@@ -21,27 +21,29 @@ saver() {
   local out="build/${name}.saver"
   mkdir -p "${out}/Contents/MacOS" "${out}/Contents/Resources"
 
-  swiftc -emit-object \
-    -o "build/${exec}.o" \
-    "$@" \
-    -sdk "${SDK}" \
-    -target "${ARCH}-apple-macosx${MINVER}" \
-    -O -wmo
+  local slices=()
+  for arch in ${ARCHS}; do
+    swiftc -emit-object \
+      -o "build/${exec}-${arch}.o" \
+      "$@" \
+      -sdk "${SDK}" \
+      -target "${arch}-apple-macosx${MINVER}" \
+      -O -wmo
 
-  # Linked with clang rather than swiftc so the result is a loadable bundle
-  # (MH_BUNDLE) rather than a dylib. The Swift runtime ships with macOS on
-  # 10.14.4+, so only an rpath to it is needed.
-  clang -bundle \
-    -o "${out}/Contents/MacOS/${exec}" \
-    "build/${exec}.o" \
-    -isysroot "${SDK}" \
-    -arch "${ARCH}" \
-    -mmacosx-version-min=${MINVER} \
-    -framework Cocoa \
-    -framework ScreenSaver \
-    -L"${SDK}/usr/lib/swift" -L/usr/lib/swift \
-    -Xlinker -rpath -Xlinker /usr/lib/swift
+    # Linked with clang rather than swiftc so the result is a loadable bundle
+    # (MH_BUNDLE) rather than a dylib.
+    clang -bundle \
+      -o "build/${exec}-${arch}" \
+      "build/${exec}-${arch}.o" \
+      -isysroot "${SDK}" \
+      -arch "${arch}" \
+      -mmacosx-version-min=${MINVER} \
+      -framework Cocoa \
+      -framework ScreenSaver
+    slices+=("build/${exec}-${arch}")
+  done
 
+  lipo -create "${slices[@]}" -output "${out}/Contents/MacOS/${exec}"
   cp "${plist}" "${out}/Contents/Info.plist"
 
   # Ad-hoc sign so macOS will load it without complaint.
@@ -59,8 +61,8 @@ saver "M-5 Multitronic" "M5Panel" src/M5Panel-Info.plist \
 saver "TOS Chronometer" "Chronometer" src/Chronometer-Info.plist \
       ${COUNTER}
 
-saver "M-5 Multitronic with Clock" "M5Clock" src/M5Clock-Info.plist \
+saver "M-5 Multitronic with Clock - Remaster" "M5Clock" src/M5Clock-Info.plist \
       src/M5PanelView.swift src/M5ClockView.swift ${COUNTER}
 
-saver "M-5 Multitronic with Retro Clock" "M5ClockRetro" src/M5ClockRetro-Info.plist \
+saver "M-5 Multitronic with Clock - Classic" "M5ClockRetro" src/M5ClockRetro-Info.plist \
       src/M5PanelView.swift src/M5ClockView.swift src/M5ClockRetroView.swift ${COUNTER}
