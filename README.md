@@ -127,10 +127,39 @@ cover glass reintroduced three of them between them, and the clock saver ran at
 once and blitted, taking that saver to ~22 ms. If something is suddenly slow,
 look for a gradient covering the whole screen before anything else.
 
-Caching that pays: whole static layers as `CGImage` — the backdrop, the glass,
-screw heads, the toggle. Caching that did not: the same trick via `CGLayer`,
-and per-window bezels; both measured inside noise. Rectangular clipping instead
-of rounded-path clipping was worth about 1.5 ms.
+### What caching does and does not fix
+
+Caching pays when it replaces per-pixel *computation* with an **opaque copy**.
+The backdrop and cover glass are the case in point: full-screen radial
+gradients became a straight blit, and a saver went from 341 ms to 22 ms.
+
+Caching does not pay when the result still has to be **alpha-composited** over
+the same area. Compositing a large translucent image costs about what
+generating it did, because both are fill-rate bound and neither is a memcpy.
+This was measured three separate ways — via `CGLayer`, per-window bezels, and
+finally the whole static window furniture as `CGImage` — and every one landed
+inside noise or under 8%.
+
+That is the ceiling, not a missing optimisation. Screen-clean figures at
+2560×1600, against a 16.67 ms budget:
+
+| Saver | ms/frame |
+|---|---|
+| M-5 Multitronic | 6.5 |
+| Clock — Classic | 19.0 |
+| Clock — Remaster | 19.4 |
+| Chronometer — Classic | 60.2 |
+| Chronometer — Remaster | 59.9 |
+
+The chronometer apertures are about 6.3× the area of the clock module's, and
+roughly eight passes fill that area every frame. Classic and Remaster cost the
+same within noise, which contradicts an assumption held for several rounds that
+the Classic's opaque mask made it the expensive one.
+
+Getting the chronometers inside budget means moving the compositing to the GPU
+— a `CAMetalLayer` returned from the view's backing layer, since a
+`ScreenSaverView` subclass cannot use `MTKView`. Rectangular clipping instead
+of rounded-path clipping was worth about 1.5 ms and is already in.
 
 Benchmarks are meaningless on a loaded machine. Check `uptime` first — a
 background encode moved these numbers by 7×.
