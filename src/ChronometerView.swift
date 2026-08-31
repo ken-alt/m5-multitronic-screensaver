@@ -85,6 +85,10 @@ public class ChronometerView: ScreenSaverView {
     /// configured, so both eras ship as separate screensavers.
     var readoutFinish: CounterFinish { return .modern }
 
+    /// The light switch is part of the mechanical panel. An emissive readout
+    /// has no lamp to switch, so only the Classic carries the fitting.
+    var showsLightSwitch: Bool { return readoutFinish == .retro }
+
     /// Aperture proportion. Wider than the clock module's, because these
     /// windows carry eight characters and the panel is far bigger on screen.
     private static let windowAspect: CGFloat = 4.0
@@ -217,6 +221,23 @@ public class ChronometerView: ScreenSaverView {
                                                               y: p.minY + p.height * 0.155),
                                           size: labelSize)
             x += eachW + gap
+        }
+
+        // Light switch on the bottom row, as on the prop, centred between the
+        // two captions. A static fitting, like the screws.
+        if showsLightSwitch {
+            let togS = p.height * 0.128
+            let capSize = p.height * 0.052
+            let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
+                           CounterChrome.labelWidth("SWITCH", size: capSize))
+            let capClear = togS * 0.45
+            let groupW = togS + capClear + capW
+            let togX = p.midX - groupW / 2 + togS / 2
+            let rowY = p.minY + p.height * 0.185
+            Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
+            CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
+                                     leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowY),
+                                     size: capSize, etched: true)
         }
     }
 }
