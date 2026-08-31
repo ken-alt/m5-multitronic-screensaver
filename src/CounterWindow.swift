@@ -520,8 +520,10 @@ enum CounterChrome {
         clipAperture(ctx, win)
     }
     private static func clipAperture(_ ctx: CGContext, _ win: CGRect) {
-        ctx.addPath(aperture(win))
-        ctx.clip()
+        // A rectangular clip, not the rounded aperture: the bezel overlaps the
+        // corners anyway, so nothing rounded is visible, and rounded-path
+        // clipping is markedly more expensive to composite through.
+        ctx.clip(to: win)
     }
 
     /// The screen itself: gloss black, the way an OLED panel reads when it is

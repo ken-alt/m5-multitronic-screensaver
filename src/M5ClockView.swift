@@ -82,7 +82,7 @@ public class M5ClockView: M5PanelView {
 
     /// The field sits on gloss glass, like a phone screen.
     public override func drawBackground(_ ctx: CGContext) {
-        CounterChrome.drawScreen(ctx, in: bounds)
+        Hardware.drawCachedScreen(ctx, in: bounds)
     }
 
     public override func draw(_ rect: NSRect) {
@@ -95,14 +95,10 @@ public class M5ClockView: M5PanelView {
                        height: CGFloat(sin(clockDrift / 113.0 * 2 * .pi)) * amp * 0.7)
         let p = plate(offsetBy: d)
 
-        // Cover glass over the display, punched through where the module sits:
-        // the module is a physical unit in a cut-out, not something on screen.
-        ctx.saveGState()
-        ctx.addRect(bounds)
-        ctx.addRect(p.insetBy(dx: -3, dy: -3))
-        ctx.clip(using: .evenOdd)
-        Hardware.drawCoverGlass(ctx, over: bounds)
-        ctx.restoreGState()
+        // Cover glass over the display. No cut-out needed: the module is drawn
+        // after it and covers its own area, and the even-odd clip forced the
+        // glass to be rebuilt live rather than blitted from cache.
+        Hardware.drawCachedGlass(ctx, over: bounds)
 
         CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.045)
 

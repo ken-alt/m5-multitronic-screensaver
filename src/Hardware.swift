@@ -342,6 +342,46 @@ enum Hardware {
         return ctx.makeImage()
     }
 
+    // MARK: Full-screen layers
+
+    private static var backdropCache: (w: Int, h: Int, img: CGImage)?
+    private static var glassCache: (w: Int, h: Int, img: CGImage)?
+
+    private static func renderLayer(w: Int, h: Int,
+                                    _ body: (CGContext, CGRect) -> Void) -> CGImage? {
+        guard w > 0, h > 0,
+              let c = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
+        else { return nil }
+        body(c, CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
+        return c.makeImage()
+    }
+
+    /// The gloss backdrop and the cover glass are fixed for a given size, but
+    /// each is built from full-screen radial gradients — by far the most
+    /// expensive thing CoreGraphics does here. Drawing them live cost over
+    /// 200 ms/frame at 2560x1600. Rendered once and blitted thereafter.
+    static func drawCachedScreen(_ ctx: CGContext, in r: CGRect) {
+        let w = Int(r.width.rounded()), h = Int(r.height.rounded())
+        if backdropCache?.w != w || backdropCache?.h != h {
+            backdropCache = renderLayer(w: w, h: h) { c, rect in
+                CounterChrome.drawScreen(c, in: rect)
+            }.map { (w, h, $0) }
+        }
+        if let b = backdropCache { ctx.draw(b.img, in: r) }
+    }
+
+    static func drawCachedGlass(_ ctx: CGContext, over r: CGRect) {
+        let w = Int(r.width.rounded()), h = Int(r.height.rounded())
+        if glassCache?.w != w || glassCache?.h != h {
+            glassCache = renderLayer(w: w, h: h) { c, rect in
+                drawCoverGlass(c, over: rect)
+            }.map { (w, h, $0) }
+        }
+        if let g = glassCache { ctx.draw(g.img, in: r) }
+    }
+
     // MARK: Cover glass
 
     /// The panel reads like a phone: a sheet of glass with the emissive display

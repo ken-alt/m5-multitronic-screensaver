@@ -184,6 +184,27 @@ Moving to an Apple Silicon Mac: copy this folder over, install the Command Line
 Tools (`xcode-select --install`) if they aren't there, and run `./build.sh`.
 It detects `arm64` and sets the deployment floor to 11.0 automatically.
 
+## What actually costs time
+
+Measured at 2560x1600 on a 1.4 GHz Core i5-8257U, against a 16.67 ms budget
+at 60fps.
+
+The single biggest cost by a wide margin is a **full-screen radial gradient**.
+One as a vignette measured ~72 ms/frame on its own. Later the gloss backdrop
+and the cover glass reintroduced three of them between them, and the clock
+saver ran at **341 ms/frame** - three frames a second. Both layers are fixed
+for a given size, so they are now rendered once and blitted, which took that
+saver to ~22 ms. If something here is suddenly slow, look for a gradient
+covering the whole screen before anything else.
+
+Caching that pays: whole static layers as `CGImage` (the backdrop, the glass,
+screw heads, the toggle). Caching that did not: the same trick via `CGLayer`,
+and per-window bezels - both measured inside noise. Rectangular clipping in
+place of rounded-path clipping was worth about 1.5 ms.
+
+Benchmarks are meaningless on a loaded machine. Check `uptime` first; an
+encode running in the background moved these numbers by 7x.
+
 ## A Swift 5.2 landmine
 
 Written in Swift, built with `swiftc` from the Command Line Tools. One trap is
