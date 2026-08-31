@@ -59,6 +59,13 @@ enum ShipboardClock {
         return String(format: "%02d", Calendar.current.component(.second, from: date))
     }
 
+    /// Always 24-hour, regardless of `use24Hour`. The chronometer panel shows
+    /// ship's time the way the prop does, with no meridiem window.
+    static func string24(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
+        return String(format: "%02d:%02d:%02d", c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
+    }
+
     /// Empty on a 24-hour reading, so the caller can skip the extra window.
     static func meridiem(_ date: Date) -> String {
         guard !use24Hour else { return "" }
@@ -74,16 +81,27 @@ public class ChronometerView: ScreenSaverView {
     private var lastTime: TimeInterval = 0
     private var drift: Double = 0
 
+    /// Which prop era the readouts are built as. Overridden rather than
+    /// configured, so both eras ship as separate screensavers.
+    var readoutFinish: CounterFinish { return .modern }
+
+    /// Aperture proportion. Wider than the clock module's, because these
+    /// windows carry eight characters and the panel is far bigger on screen.
+    private static let windowAspect: CGFloat = 4.0
+    private static let driftAmp: CGFloat = 0.016
+
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
         animationTimeInterval = 1.0 / 60.0
         wantsLayer = true
         let face = DigitFacePreference.best()
-        stardate.face = face
-        shipboard.face = face
+        for w in [stardate, shipboard] {
+            w.face = face
+            w.finish = readoutFinish
+        }
         let now = Date()
         stardate.set(Stardate.string(now), animated: false)
-        shipboard.set(ShipboardClock.string(now), animated: false)
+        shipboard.set(ShipboardClock.string24(now), animated: false)
     }
 
     required init?(coder: NSCoder) { super.init(coder: coder) }
@@ -112,12 +130,12 @@ public class ChronometerView: ScreenSaverView {
 
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        // Detached from its window, there is nothing left to draw for.
         if window == nil { stopped = true }
     }
 
-    /// False once the saver has been dismissed. Guards the animation callback.
     var isRunning: Bool { return !stopped }
+
+    // MARK: Animation
 
     public override func animateOneFrame() {
         guard isRunning else { return }
@@ -127,72 +145,78 @@ public class ChronometerView: ScreenSaverView {
         if dt > 0.25 { dt = 0.25 }
 
         drift += dt
-        let date = Date()
-        stardate.set(Stardate.string(date))
-        shipboard.set(ShipboardClock.string(date))
+        let stamp = Date()
+        stardate.set(Stardate.string(stamp))
+        shipboard.set(ShipboardClock.string24(stamp))
         stardate.advance(dt)
         shipboard.advance(dt)
 
         setNeedsDisplay(bounds)
     }
 
+    // MARK: Drawing
+
     public override func draw(_ rect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
-        ctx.setFillColor(CGColor(red: 0.012, green: 0.010, blue: 0.009, alpha: 1))
-        ctx.fill(bounds)
+        Hardware.drawCachedScreen(ctx, in: bounds)
 
-        // Slow wander, so a clock parked on screen for hours isn't a burn-in
-        // risk. Two incommensurate periods, so it never repeats exactly.
-        let amp = min(bounds.width, bounds.height) * 0.035
+        // Slow wander, so a panel left up for hours is not a burn-in risk.
+        // Two incommensurate periods, so it never repeats exactly.
+        let amp = min(bounds.width, bounds.height) * ChronometerView.driftAmp
         let dx = CGFloat(sin(drift / 97.0 * 2 * .pi)) * amp
         let dy = CGFloat(sin(drift / 131.0 * 2 * .pi)) * amp * 0.6
 
-        let panelW = min(bounds.width * 0.72, bounds.height * 1.55)
-        let panelH = panelW * 0.41
-        let panel = CGRect(x: bounds.midX - panelW / 2 + dx,
-                           y: bounds.midY - panelH / 2 + dy,
-                           width: panelW, height: panelH)
+        let plateW = min(bounds.width * 0.72, bounds.height * 2.1)
+        let plateH = plateW * 0.32
+        let p = CGRect(x: bounds.midX - plateW / 2 + dx,
+                       y: bounds.midY - plateH / 2 + dy,
+                       width: plateW, height: plateH)
 
-        drawPanel(ctx, panel)
+        CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.035)
 
-        // Proportions measured off the prop, as fractions of the panel.
-        let winW = panelW * 0.355
-        let winY0 = panel.maxY - panelH * 0.63
-        let winY1 = panel.maxY - panelH * 0.37
-        let left  = CGRect(x: panel.minX + panelW * 0.090, y: winY0, width: winW, height: winY1 - winY0)
-        let right = CGRect(x: panel.minX + panelW * 0.555, y: winY0, width: winW, height: winY1 - winY0)
+        let winH = p.height * 0.32
+        let winY = p.maxY - p.height * 0.62
+        let eachW = winH * ChronometerView.windowAspect
+        let sideW = CounterChrome.bezelSideWidth(
+            forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
+        let gap = sideW * 2 + winH * 0.30
 
-        let lampY = panel.maxY - panelH * 0.25
-        let lampR = panelW * 0.025
-        // The prop's indicator lamps read orange-red, so these keep that
-        // colour; the clock-only saver uses a true red.
-        CounterChrome.drawLED(ctx, at: CGPoint(x: left.midX,  y: lampY), radius: lampR,
-                              red: 0.94, green: 0.28, blue: 0.06)
-        CounterChrome.drawLED(ctx, at: CGPoint(x: right.midX, y: lampY), radius: lampR,
-                              red: 0.94, green: 0.28, blue: 0.06)
+        let texts = [Stardate.string(Date()), ShipboardClock.string24(Date())]
+        let windows = [stardate, shipboard]
+        let captions = ["STARDATE", "SHIPBOARD"]
 
-        stardate.draw(ctx, in: left)
-        shipboard.draw(ctx, in: right)
+        // One pitch and one glyph height across both, so the readouts match.
+        let widestUnits = texts.reduce(CGFloat(0)) { max($0, CounterWindow.units(for: $1)) }
+        let pitch = max(1, (eachW - 2 * winH * CounterWindow.padFraction) / widestUnits)
+        var widestRatio: CGFloat = 0
+        for w in windows {
+            w.fixedPitch = pitch
+            widestRatio = max(widestRatio, w.widestGlyphRatio())
+        }
+        let digitH = widestRatio > 0
+            ? min(winH * 0.60, pitch * CounterWindow.glyphFit / widestRatio)
+            : winH * 0.60
+        for w in windows { w.fixedDigitHeight = digitH }
 
-        let labelY = panel.maxY - panelH * 0.80
-        let labelSize = panelH * 0.105
-        CounterChrome.drawLabel(ctx, "STARDATE",  centeredAt: CGPoint(x: left.midX,  y: labelY), size: labelSize)
-        CounterChrome.drawLabel(ctx, "SHIPBOARD", centeredAt: CGPoint(x: right.midX, y: labelY), size: labelSize)
-    }
+        let lampR = p.height * 0.036
+        let lampY = p.maxY - p.height * 0.155
+        let labelSize = p.height * 0.072
 
-    private func drawPanel(_ ctx: CGContext, _ panel: CGRect) {
-        ctx.setFillColor(CGColor(red: 0.055, green: 0.047, blue: 0.043, alpha: 1))
-        ctx.fill(panel)
-
-        // Screw heads at the corners, as on the prop.
-        let inset = panel.width * 0.022
-        let r = panel.width * 0.007
-        ctx.setFillColor(CGColor(red: 0.34, green: 0.33, blue: 0.31, alpha: 1))
-        for x in [panel.minX + inset, panel.maxX - inset] {
-            for y in [panel.minY + inset, panel.maxY - inset] {
-                ctx.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
-            }
+        let groupW = eachW * 2 + gap
+        var x = p.midX - groupW / 2
+        for (i, w) in windows.enumerated() {
+            let r = CGRect(x: x, y: winY, width: eachW, height: winH)
+            // The prop's indicator lamps read orange-red; the clock-only saver
+            // uses a true red.
+            CounterChrome.drawLED(ctx, at: CGPoint(x: r.midX, y: lampY), radius: lampR,
+                                  red: 0.94, green: 0.28, blue: 0.06)
+            w.draw(ctx, in: r)
+            CounterChrome.drawEtchedLabel(ctx, captions[i],
+                                          centeredAt: CGPoint(x: r.midX,
+                                                              y: p.minY + p.height * 0.155),
+                                          size: labelSize)
+            x += eachW + gap
         }
     }
 }

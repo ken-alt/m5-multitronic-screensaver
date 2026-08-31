@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>Chronometer</string>
+	<string>ChronometerRetro</string>
 	<key>CFBundleIdentifier</key>
-	<string>local.ken.screensaver.chronometer</string>
+	<string>local.ken.screensaver.chronometerretro</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>TOS Chronometer - Remaster</string>
+	<string>TOS Chronometer - Classic</string>
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
@@ -21,7 +21,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>15.0</string>
 	<key>NSPrincipalClass</key>
-	<string>ChronometerView</string>
+	<string>ChronometerRetroView</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Original animation. Inspired by the stardate chronometer, Star Trek TOS.</string>
 </dict>

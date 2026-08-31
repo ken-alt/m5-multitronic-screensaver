@@ -58,8 +58,11 @@ COUNTER="src/CounterWindow.swift src/DrumDigits.swift src/Hardware.swift src/Chr
 saver "M-5 Multitronic" "M5Panel" src/M5Panel-Info.plist \
       src/M5PanelView.swift
 
-saver "TOS Chronometer" "Chronometer" src/Chronometer-Info.plist \
+saver "TOS Chronometer - Remaster" "Chronometer" src/Chronometer-Info.plist \
       ${COUNTER}
+
+saver "TOS Chronometer - Classic" "ChronometerRetro" src/ChronometerRetro-Info.plist \
+      ${COUNTER} src/ChronometerRetroView.swift
 
 saver "M-5 Multitronic with Clock - Remaster" "M5Clock" src/M5Clock-Info.plist \
       src/M5PanelView.swift src/M5ClockView.swift ${COUNTER}
