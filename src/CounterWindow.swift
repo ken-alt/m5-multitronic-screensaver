@@ -508,6 +508,13 @@ final class CounterWindow {
 
 enum CounterChrome {
 
+    /// One light direction for the whole panel: above and slightly to the
+    /// right. Everything that shades — the plate, the screws, the lens
+    /// speculars, the engraving — reads from this so they cannot disagree.
+    static let lightX: CGFloat = 0.42
+    static let lightY: CGFloat = 0.91
+
+
     private static func grad(_ stops: [(CGFloat, CGColor)]) -> CGGradient? {
         return CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
                           colors: stops.map { $0.1 } as CFArray,
@@ -637,11 +644,16 @@ enum CounterChrome {
         // Faceplate: dark charcoal, very slightly lit from above.
         // Black anodised aluminium: a cool, nearly neutral dark with a satin
         // sheen, not the warm charcoal of painted steel.
-        if let g = grad([(0.0, CGColor(red: 0.083, green: 0.085, blue: 0.092, alpha: 1)),
-                         (0.5, CGColor(red: 0.055, green: 0.057, blue: 0.063, alpha: 1)),
-                         (1.0, CGColor(red: 0.036, green: 0.037, blue: 0.042, alpha: 1))]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
-                                   end: CGPoint(x: plate.minX, y: plate.minY), options: [])
+        if let g = grad([(0.0, CGColor(red: 0.092, green: 0.094, blue: 0.101, alpha: 1)),
+                         (0.5, CGColor(red: 0.056, green: 0.058, blue: 0.064, alpha: 1)),
+                         (1.0, CGColor(red: 0.032, green: 0.033, blue: 0.038, alpha: 1))]) {
+            // Along the light direction rather than straight down.
+            ctx.drawLinearGradient(g,
+                                   start: CGPoint(x: plate.midX + lightX * plate.width * 0.5,
+                                                  y: plate.midY + lightY * plate.height * 0.5),
+                                   end: CGPoint(x: plate.midX - lightX * plate.width * 0.5,
+                                                y: plate.midY - lightY * plate.height * 0.5),
+                                   options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         }
         // Satin sheen across the anodised face.
         ctx.setBlendMode(.plusLighter)
@@ -656,20 +668,38 @@ enum CounterChrome {
         }
         ctx.setBlendMode(.normal)
 
-        // The screen overhangs the top of the recess and shades it.
-        if let g = grad([(0, black(0.75)), (1, black(0))]) {
+        // Light comes from above and slightly to the right, so the surrounding
+        // screen overhangs and shades the top and right insides of the recess,
+        // while the bottom and left catch it. That asymmetry is what makes the
+        // plate read as sunk rather than pasted on.
+        let deep = plate.height * 0.11
+        if let g = grad([(0, black(0.82)), (1, black(0))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
-                                   end: CGPoint(x: plate.minX, y: plate.maxY - plate.height * 0.10),
-                                   options: [])
-            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
-                                   end: CGPoint(x: plate.minX + plate.width * 0.012, y: plate.minY),
-                                   options: [])
-        }
-        if let g = grad([(0, white(0.10)), (1, white(0))]) {
-            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
-                                   end: CGPoint(x: plate.minX, y: plate.minY + plate.height * 0.035),
+                                   end: CGPoint(x: plate.minX, y: plate.maxY - deep), options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.maxX, y: plate.minY),
+                                   end: CGPoint(x: plate.maxX - deep * 0.55, y: plate.minY),
                                    options: [])
         }
+        if let g = grad([(0, white(0.13)), (1, white(0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
+                                   end: CGPoint(x: plate.minX, y: plate.minY + deep * 0.42),
+                                   options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
+                                   end: CGPoint(x: plate.minX + deep * 0.40, y: plate.minY),
+                                   options: [])
+        }
+        ctx.restoreGState()
+
+        // A crisp edge so the plate reads as a separate object against the
+        // screen: catching the light along the top and right, dark below-left.
+        ctx.saveGState()
+        ctx.addPath(CGPath(roundedRect: plate, cornerWidth: r, cornerHeight: r, transform: nil))
+        ctx.clip()
+        ctx.setLineWidth(max(1.5, plate.height * 0.008))
+        ctx.setStrokeColor(white(0.22))
+        ctx.addPath(CGPath(roundedRect: plate.insetBy(dx: 0.5, dy: 0.5),
+                           cornerWidth: r, cornerHeight: r, transform: nil))
+        ctx.strokePath()
         ctx.restoreGState()
 
         drawScrews(ctx, in: plate, inset: screwInset)
@@ -1050,7 +1080,7 @@ enum CounterChrome {
                                    startRadius: 0, endCenter: c, endRadius: r, options: [])
         }
         if let spec = grad([(0, white(0.85)), (1, white(0.0))]) {
-            let sc = CGPoint(x: c.x - r * 0.32, y: c.y + r * 0.40)
+            let sc = CGPoint(x: c.x + lightX * r * 0.42, y: c.y + lightY * r * 0.42)
             ctx.drawRadialGradient(spec, startCenter: sc, startRadius: 0,
                                    endCenter: sc, endRadius: r * 0.44, options: [])
         }
@@ -1059,32 +1089,69 @@ enum CounterChrome {
 
     /// Cut into the metal rather than printed on it: the groove reads dark,
     /// with its far wall catching the light from above-left.
+    /// Glyph outlines for a run of text, so shading can be clipped inside the
+    /// letterforms rather than dropped behind them.
+    static func textPath(_ text: String, font: NSFont, kern: CGFloat) -> CGPath {
+        let attr = NSAttributedString(string: text, attributes: [.font: font, .kern: kern])
+        let line = CTLineCreateWithAttributedString(attr)
+        let out = CGMutablePath()
+        guard let runs = CTLineGetGlyphRuns(line) as? [CTRun] else { return out }
+        for run in runs {
+            let dict = CTRunGetAttributes(run)
+            let key = Unmanaged.passUnretained(kCTFontAttributeName).toOpaque()
+            guard let raw = CFDictionaryGetValue(dict, key) else { continue }
+            let f = unsafeBitCast(raw, to: CTFont.self)
+            let n = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: n)
+            var pos = [CGPoint](repeating: .zero, count: n)
+            CTRunGetGlyphs(run, CFRangeMake(0, n), &glyphs)
+            CTRunGetPositions(run, CFRangeMake(0, n), &pos)
+            for i in 0 ..< n {
+                guard let g = CTFontCreatePathForGlyph(f, glyphs[i], nil) else { continue }
+                let t = CGAffineTransform(translationX: pos[i].x, y: pos[i].y)
+                out.addPath(g, transform: t)
+            }
+        }
+        return out
+    }
+
+    /// Cut into the metal and ink-filled. The shading is clipped *inside* the
+    /// letterforms: a groove lit from above-right has its near wall in shadow
+    /// and its far wall catching light, which is what makes it read as recessed
+    /// rather than as type sitting on the surface with a shadow behind it.
     static func drawEtchedLabel(_ ctx: CGContext, _ text: String,
                                 centeredAt c: CGPoint, size: CGFloat) {
         let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
         let kern = size * 0.20
-        // Engraved and ink-filled, which is how a legend on black anodising is
-        // actually made. A bare groove is darker than the surface and vanishes
-        // against it; the ink is what carries the reading, with a shadow above
-        // and a lit lower wall giving it the recess.
-        let passes: [(CGSize, NSColor)] = [
-            (CGSize(width: -size * 0.045, height: size * 0.045),
-             NSColor(white: 0.0, alpha: 0.75)),            // shadowed near wall
-            (CGSize(width: size * 0.05, height: -size * 0.05),
-             NSColor(white: 0.72, alpha: 0.35)),           // lit far wall
-            (.zero, NSColor(white: 0.80, alpha: 0.96)),    // the ink fill
-        ]
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        for (off, col) in passes {
-            let a = NSAttributedString(string: text, attributes: [
-                .font: font, .foregroundColor: col, .kern: kern,
-            ])
-            let sz = a.size()
-            a.draw(at: NSPoint(x: c.x - (sz.width - kern) / 2 + off.width,
-                               y: c.y - sz.height / 2 + off.height))
+        let glyphs = textPath(text, font: font, kern: kern)
+        let b = glyphs.boundingBox
+        guard b.width > 0 else { return }
+        var t = CGAffineTransform(translationX: c.x - b.midX, y: c.y - b.midY)
+        guard let path = glyphs.copy(using: &t) else { return }
+
+        let d = size * 0.055
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.setFillColor(CGColor(red: 0.80, green: 0.80, blue: 0.79, alpha: 0.96))
+        ctx.fillPath()
+
+        ctx.addPath(path)
+        ctx.clip()
+        // Near wall, shadowed.
+        var s1 = CGAffineTransform(translationX: lightX * d, y: lightY * d)
+        if let p1 = path.copy(using: &s1) {
+            ctx.setFillColor(black(0.55))
+            ctx.addPath(p1)
+            ctx.fillPath(using: .evenOdd)
         }
-        NSGraphicsContext.restoreGraphicsState()
+        // Far wall, catching the light.
+        var s2 = CGAffineTransform(translationX: -lightX * d, y: -lightY * d)
+        if let p2 = path.copy(using: &s2) {
+            ctx.setFillColor(white(0.34))
+            ctx.addPath(p2)
+            ctx.fillPath(using: .evenOdd)
+        }
+        ctx.restoreGState()
     }
 
     /// Left-justified caption, one line per element, as panel legends are set.

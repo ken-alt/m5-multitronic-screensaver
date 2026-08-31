@@ -64,7 +64,8 @@ enum Hardware {
         let r = side / 2.6                       // head radius, leaving room for the shadow
         let head = CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)
         // Light from upper-left, matching every other fitting on the panel.
-        let lx: CGFloat = -0.66, ly: CGFloat = 0.66
+        // Same light as the rest of the panel: above and slightly right.
+        let lx = CounterChrome.lightX, ly = CounterChrome.lightY
         let lit = CGPoint(x: c.x + lx * r, y: c.y + ly * r)
         let dark = CGPoint(x: c.x - lx * r, y: c.y - ly * r)
 

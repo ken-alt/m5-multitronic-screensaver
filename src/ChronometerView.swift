@@ -172,7 +172,7 @@ public class ChronometerView: ScreenSaverView {
         let dy = CGFloat(sin(drift / 131.0 * 2 * .pi)) * amp * 0.6
 
         let plateW = min(bounds.width * 0.72, bounds.height * 2.1)
-        let plateH = plateW * 0.32
+        let plateH = plateW * 0.36
         let p = CGRect(x: bounds.midX - plateW / 2 + dx,
                        y: bounds.midY - plateH / 2 + dy,
                        width: plateW, height: plateH)
@@ -233,7 +233,7 @@ public class ChronometerView: ScreenSaverView {
             let capClear = togS * 0.45
             let groupW = togS + capClear + capW
             let togX = p.midX - groupW / 2 + togS / 2
-            let rowY = p.minY + p.height * 0.150
+            let rowY = p.minY + p.height * 0.205
             Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
             CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
                                      leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowY),
