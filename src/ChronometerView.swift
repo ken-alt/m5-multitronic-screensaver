@@ -92,7 +92,35 @@ public class ChronometerView: ScreenSaverView {
     public override var hasConfigureSheet: Bool { return false }
     public override var configureSheet: NSWindow? { return nil }
 
+    // MARK: Lifecycle guard
+
+    /// Apple's framework does not reliably tear a saver's view down when the
+    /// screen saver is dismissed: the instance survives and `animateOneFrame`
+    /// keeps being called, burning CPU indefinitely. Track it ourselves and
+    /// become inert once stopped or detached.
+    private var stopped = false
+
+    public override func startAnimation() {
+        stopped = false
+        super.startAnimation()
+    }
+
+    public override func stopAnimation() {
+        stopped = true
+        super.stopAnimation()
+    }
+
+    public override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Detached from its window, there is nothing left to draw for.
+        if window == nil { stopped = true }
+    }
+
+    /// False once the saver has been dismissed. Guards the animation callback.
+    var isRunning: Bool { return !stopped }
+
     public override func animateOneFrame() {
+        guard isRunning else { return }
         let now = Date.timeIntervalSinceReferenceDate
         var dt = lastTime > 0 ? now - lastTime : 1.0 / 60.0
         lastTime = now

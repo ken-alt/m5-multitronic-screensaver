@@ -209,6 +209,20 @@ place of rounded-path clipping was worth about 1.5 ms.
 Benchmarks are meaningless on a loaded machine. Check `uptime` first; an
 encode running in the background moved these numbers by 7x.
 
+## The framework does not stop your saver
+
+Apple's screen saver framework does not reliably tear a view down when the
+saver is dismissed. The instance survives and `animateOneFrame` keeps being
+called, burning CPU indefinitely - there is nothing in the framework that stops
+it. Every view here tracks its own state through `startAnimation` /
+`stopAnimation` and `viewDidMoveToWindow`, and becomes inert once stopped or
+detached from its window.
+
+Measured: the animation callback costs 17.8 us while running and 0.09 us once
+dismissed on the bar field, and 140.7 us against 0.17 us on the retro clock.
+Without the guard, that second figure is what runs forever after you dismiss
+the screen saver.
+
 ## A Swift 5.2 landmine
 
 Written in Swift, built with `swiftc` from the Command Line Tools. One trap is

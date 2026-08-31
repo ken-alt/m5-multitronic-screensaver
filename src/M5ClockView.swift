@@ -70,6 +70,7 @@ public class M5ClockView: M5PanelView {
     // MARK: Animation
 
     public override func animateOneFrame() {
+        guard isRunning else { return }
         super.animateOneFrame()          // advances the bar field
 
         let now = Date.timeIntervalSinceReferenceDate
