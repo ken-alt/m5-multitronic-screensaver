@@ -101,13 +101,18 @@ final class CounterWindow {
 
     /// Seconds for a digit to roll over. At 60fps this is ~12 frames, enough
     /// to read as a wheel turning rather than a snap.
+    /// Seconds for a digit to change. Set from `finish`: the mechanical wheel
+    /// is given longer to turn through, the emissive display transitions
+    /// quicker. Assign after `finish` to override.
     var rollDuration: Double = 0.20
 
     /// When set, the reading uses this cell pitch instead of scaling to fill
     /// its own aperture, so several windows can share one digit size. Without
     /// it, an equal-width window holding two characters draws them far larger
     /// than one holding five.
-    var finish: CounterFinish = .modern
+    var finish: CounterFinish = .modern {
+        didSet { rollDuration = (finish == .retro) ? 0.30 : 0.20 }
+    }
 
     var fixedPitch: CGFloat?
 
@@ -270,20 +275,43 @@ final class CounterWindow {
             if slot.roll >= 1 {
                 drawGlyph(ctx, slot.current, in: cell, collecting: lit)
             } else {
-                // The wheel turns upward: the old digit rises out of view while
-                // the new one comes up from below. Travel is just over one
-                // digit height, not the window height — on a real drum the
-                // next number sits right behind the last.
-                let p = CGFloat(easeInOutCubic(slot.roll))
-                // Far enough that the outgoing digit has cleared the aperture
-                // before the incoming one is fully in. Keying this to digit
-                // height alone breaks once the glyphs are small relative to the
-                // window: both readings end up visible, stacked.
-                let travel = max(digitH * 1.30, (win.height + digitH) * 0.5)
-                drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * p),
-                          collecting: lit)
-                drawGlyph(ctx, slot.current,  in: cell.offsetBy(dx: 0, dy: -travel * (1 - p)),
-                          collecting: lit)
+                let e = CGFloat(easeInOutCubic(slot.roll))
+
+                if finish == .retro {
+                    // A physical wheel turns, so the numerals travel on an arc:
+                    // vertical position follows sin, apparent height follows
+                    // cos. That gives the motion its own easing — quickest as a
+                    // digit passes the centre — and the foreshortening is what
+                    // reads as rotation rather than a slide.
+                    //
+                    // Travel is shorter than a slide needs, because a turning
+                    // glyph also shrinks and so leaves the slot sooner. At the
+                    // sliding distance both digits were off the ends at the
+                    // halfway point and the middle went empty. Adjacent
+                    // numerals sit about one digit height apart on a real wheel.
+                    let travel = digitH * 1.02
+                    let sweep: CGFloat = 1.16              // radians either side
+                    for (ch, theta) in [(slot.previous, e * sweep),
+                                        (slot.current, (e - 1) * sweep)] {
+                        let dy = travel * sin(theta) / sin(sweep)
+                        drawGlyph(ctx, ch, in: cell.offsetBy(dx: 0, dy: dy),
+                                  squash: max(0.10, cos(theta)), collecting: lit)
+                    }
+                } else {
+                    // The remastered readout is emissive — a lit display with
+                    // no wheel behind it — so the numerals translate rather
+                    // than turn. Nothing rotates, so nothing foreshortens.
+                    //
+                    // Far enough that the outgoing digit clears the aperture
+                    // before the incoming one is fully in. Keying this to digit
+                    // height alone breaks once glyphs are small relative to the
+                    // window: both readings end up visible, stacked.
+                    let travel = max(digitH * 1.30, (win.height + digitH) * 0.5)
+                    drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * e),
+                              collecting: lit)
+                    drawGlyph(ctx, slot.current, in: cell.offsetBy(dx: 0, dy: -travel * (1 - e)),
+                              collecting: lit)
+                }
             }
             ctx.restoreGState()
 
@@ -323,6 +351,7 @@ final class CounterWindow {
 
     /// Printed numerals: a flat dark shape on the drum, no glow at all.
     private func drawInkGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect,
+                              squash: CGFloat = 1.0,
                               collecting lit: CGMutablePath?) {
         ctx.saveGState()
         ctx.setBlendMode(.normal)
@@ -349,7 +378,7 @@ final class CounterWindow {
             }
         case .font, .system:
             if let unit = unitPath(ch) {
-                var t = CGAffineTransform(scaleX: cell.height, y: cell.height)
+                var t = CGAffineTransform(scaleX: cell.height, y: cell.height * squash)
                     .concatenating(CGAffineTransform(translationX: cell.midX, y: cell.midY))
                 if let path = unit.copy(using: &t) {
                     ctx.addPath(path)
@@ -404,8 +433,11 @@ final class CounterWindow {
     }
 
     private func drawGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect,
+                           squash: CGFloat = 1.0,
                            collecting lit: CGMutablePath? = nil) {
-        if finish == .retro { drawInkGlyph(ctx, ch, in: cell, collecting: lit); return }
+        if finish == .retro {
+            drawInkGlyph(ctx, ch, in: cell, squash: squash, collecting: lit); return
+        }
         let a = CounterStyle.amber
         ctx.saveGState()
         ctx.setBlendMode(.plusLighter)
@@ -448,7 +480,7 @@ final class CounterWindow {
 
         case .font, .system:
             guard let unit = unitPath(ch) else { break }
-            var t = CGAffineTransform(scaleX: cell.height, y: cell.height)
+            var t = CGAffineTransform(scaleX: cell.height, y: cell.height * squash)
                 .concatenating(CGAffineTransform(translationX: cell.midX, y: cell.midY))
             guard let path = unit.copy(using: &t) else { break }
             // The outline is filled; the glow comes from stroking it outward.
