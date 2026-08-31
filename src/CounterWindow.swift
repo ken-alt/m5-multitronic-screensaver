@@ -20,9 +20,12 @@ enum CounterStyle {
 
     /// The original prop reads the other way round: dark numerals printed on
     /// pale drums behind a white mask, rather than lit numerals on a dark one.
-    static let retroDrum = CGColor(red: 0.880, green: 0.834, blue: 0.716, alpha: 1)
+    /// Nearly neutral stock. The warmth belongs to the lamp, not the paper —
+    /// tinting the drum as well double-counts it and the amber stops reading
+    /// as light falling on something.
+    static let retroDrum = CGColor(red: 0.618, green: 0.610, blue: 0.586, alpha: 1)
     static let retroInk  = CGColor(red: 0.086, green: 0.082, blue: 0.074, alpha: 1)
-    static let retroMask = CGColor(red: 0.905, green: 0.901, blue: 0.889, alpha: 1)
+    static let retroMask = CGColor(red: 0.605, green: 0.601, blue: 0.590, alpha: 1)
 
     /// The digits are printed on a drum and lit from outside, not emissive, so
     /// this is a faint edge spill rather than a glow. The prop's numerals are
@@ -866,27 +869,33 @@ enum CounterChrome {
         ctx.saveGState()
         clipAperture(ctx, win)
 
-        // The lamps sit behind the mask and spill onto the drums at the slot
-        // edges — strongly along the top, a little along the bottom — so the
-        // surface is dimmest through the middle. Multiplied, because the
-        // numerals are printed on that surface and share its light.
+        // A lamp sits above the opening, behind the mask, and throws light down
+        // onto the drums. So the surface is brightest immediately under the top
+        // lip and falls away towards the bottom — it is not lit from both edges.
+        // Multiplied, because the numerals are printed on that surface and are
+        // lit by the same lamp.
         ctx.setBlendMode(.multiply)
-        if let g = grad([(0.0, black(0.0)), (0.20, black(0.05)), (0.50, black(0.24)),
-                         (0.80, black(0.11)), (1.0, black(0.03))]) {
+        if let g = grad([(0.0, black(0.0)), (0.18, black(0.02)), (0.45, black(0.12)),
+                         (0.72, black(0.27)), (1.0, black(0.44))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
                                    end: CGPoint(x: win.minX, y: win.minY), options: [])
         }
 
-        // Warm spill where the light actually enters.
+        // Where the light actually enters, just under the lip: a warm band that
+        // falls off quickly down the drum face.
         ctx.setBlendMode(.plusLighter)
-        let warm = { (v: CGFloat) in CGColor(red: 0.60, green: 0.44, blue: 0.16, alpha: v) }
-        if let g = grad([(0.0, warm(0.13)), (1.0, warm(0.0))]) {
+        let warm = { (v: CGFloat) in CGColor(red: 0.62, green: 0.46, blue: 0.17, alpha: v) }
+        if let g = grad([(0.0, warm(0.34)), (0.30, warm(0.15)),
+                         (0.65, warm(0.05)), (1.0, warm(0.0))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
-                                   end: CGPoint(x: win.minX, y: win.maxY - win.height * 0.42),
+                                   end: CGPoint(x: win.minX, y: win.maxY - win.height * 0.92),
                                    options: [])
-            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
-                                   end: CGPoint(x: win.minX, y: win.minY + win.height * 0.22),
-                                   options: [])
+        }
+        // A little of the lamp reaches the whole face, so the drums read warm
+        // against the neutral mask rather than merely less bright.
+        if let g = grad([(0.0, warm(0.10)), (1.0, warm(0.045))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.minY), options: [])
         }
         ctx.restoreGState()
     }

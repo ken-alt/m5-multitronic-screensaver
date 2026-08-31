@@ -61,3 +61,6 @@ saver "TOS Chronometer" "Chronometer" src/Chronometer-Info.plist \
 
 saver "M-5 Multitronic with Clock" "M5Clock" src/M5Clock-Info.plist \
       src/M5PanelView.swift src/M5ClockView.swift ${COUNTER}
+
+saver "M-5 Multitronic with Retro Clock" "M5ClockRetro" src/M5ClockRetro-Info.plist \
+      src/M5PanelView.swift src/M5ClockView.swift src/M5ClockRetroView.swift ${COUNTER}

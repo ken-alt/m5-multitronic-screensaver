@@ -5,7 +5,11 @@ original code; only the look is referenced.
 
 - **M-5 Multitronic** — the M-5 computer readout panel
 - **TOS Chronometer** — the stardate chronometer
-- **M-5 Multitronic with Clock** — the panel with the shipboard clock along the top
+- **M-5 Multitronic with Clock** — the panel with the clock module, remastered
+  finish: lit amber numerals on dark drums
+- **M-5 Multitronic with Retro Clock** — the same panel and mechanism with the
+  original prop's finish: dark ink on pale drums behind a white mask, lit by a
+  warm lamp above the opening
 
 ---
 

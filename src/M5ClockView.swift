@@ -21,6 +21,10 @@ public class M5ClockView: M5PanelView {
     private var clockTime: TimeInterval = 0
     private var clockDrift: Double = 0
 
+    /// Which prop era the readouts are built as. Overridden rather than
+    /// configured, so both eras ship as separate screensavers.
+    var readoutFinish: CounterFinish { return .modern }
+
     /// Aperture proportion: wide rather than square, as on the prop.
     private static let windowAspect: CGFloat = 2.9
 
@@ -31,7 +35,10 @@ public class M5ClockView: M5PanelView {
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
         let face = DigitFacePreference.best()
-        for w in [hoursMins, seconds, meridiem] { w.face = face }
+        for w in [hoursMins, seconds, meridiem] {
+            w.face = face
+            w.finish = readoutFinish
+        }
         let now = Date()
         hoursMins.set(ShipboardClock.hoursMinutes(now), animated: false)
         seconds.set(ShipboardClock.seconds(now), animated: false)
