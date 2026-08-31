@@ -51,7 +51,7 @@ saver() {
   echo "Built ${out}"
 }
 
-COUNTER="src/CounterWindow.swift src/DrumDigits.swift src/ChronometerView.swift"
+COUNTER="src/CounterWindow.swift src/DrumDigits.swift src/Hardware.swift src/ChronometerView.swift"
 
 saver "M-5 Multitronic" "M5Panel" src/M5Panel-Info.plist \
       src/M5PanelView.swift

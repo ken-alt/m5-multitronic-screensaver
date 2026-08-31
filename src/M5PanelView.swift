@@ -161,6 +161,13 @@ public class M5PanelView: ScreenSaverView {
         super.init(coder: coder)
     }
 
+    /// What sits behind the bars. Subclasses override this to put the field on
+    /// something other than flat black.
+    func drawBackground(_ ctx: CGContext) {
+        ctx.setFillColor(gray: 0.016, alpha: 1.0)
+        ctx.fill(bounds)
+    }
+
     /// A region bars will not spawn into or grow across. Subclasses that put
     /// something on top of the field (a clock, say) override this so the field
     /// leaves room instead of running through it. Computed from `bounds` only,
@@ -205,12 +212,14 @@ public class M5PanelView: ScreenSaverView {
         // Sparse: the panel is mostly black, with a couple dozen live bars.
         let want = min(max(8, Int(Double(cols * rows) * 0.060)), 80)
 
-        bars = (0 ..< want).map { _ in
-            var bar = spawnBar(releasing: -1)
+        bars = []
+        bars.reserveCapacity(want)
+        for i in 0 ..< want {
+            var bar = placeBar(releasing: -1, ignoring: i)
             // Stagger the initial state so nothing starts in lockstep.
             bar.phase = [Phase.grow, .hold, .leave, .gap].randomElement()!
             bar.t = Double.random(in: 0 ..< 1.4)
-            return bar
+            bars.append(bar)
         }
     }
 
@@ -236,6 +245,34 @@ public class M5PanelView: ScreenSaverView {
             return c
         }
         return -1
+    }
+
+    /// A bar's extent along its own axis.
+    private func span(_ b: Bar) -> (CGFloat, CGFloat) {
+        let base = b.vertical ? b.y : b.x
+        let end = base + b.maxLen * b.dir
+        return (min(base, end), max(base, end))
+    }
+
+    /// True if `bar` would run alongside a live parallel bar with no visible
+    /// gap. The occupancy grid only reserves a bar's anchor cell, so without
+    /// this two long parallels can end up a few pixels apart, which reads as a
+    /// mistake rather than as a machine laying out a deliberate pattern.
+    /// Crossings are left alone — those are part of the prop's look.
+    private func tooClose(_ bar: Bar, ignoring index: Int) -> Bool {
+        guard bar.maxLen > 0 else { return false }
+        let gap = unit * 7.0
+        let (a0, a1) = span(bar)
+        for (i, o) in bars.enumerated() {
+            guard i != index, o.phase != .gap, o.maxLen > 0,
+                  o.vertical == bar.vertical else { continue }
+            let perp = bar.vertical ? abs(o.x - bar.x) : abs(o.y - bar.y)
+            if perp > gap + (bar.thickness + o.thickness) * 0.5 { continue }
+            let (b0, b1) = span(o)
+            // Pad the ends too, so collinear bars don't butt up either.
+            if a0 - gap < b1 && b0 - gap < a1 { return true }
+        }
+        return false
     }
 
     /// How far this bar may grow before it would enter `reserved`.
@@ -342,6 +379,19 @@ public class M5PanelView: ScreenSaverView {
         return bar
     }
 
+    /// Spawns a bar, retrying a few placements if it would crowd a parallel
+    /// neighbour. Gives up rather than looping — a slightly tight pair is far
+    /// better than a stall.
+    private func placeBar(releasing oldCell: Int, ignoring index: Int) -> Bar {
+        var bar = spawnBar(releasing: oldCell)
+        var tries = 0
+        while tries < 10 && tooClose(bar, ignoring: index) {
+            bar = spawnBar(releasing: bar.cell)
+            tries += 1
+        }
+        return bar
+    }
+
     // MARK: Animation
 
     public override func animateOneFrame() {
@@ -374,8 +424,7 @@ public class M5PanelView: ScreenSaverView {
                 }
             case .gap:
                 if bars[i].t >= bars[i].gapDur {
-                    let fresh = spawnBar(releasing: bars[i].cell)
-                    bars[i] = fresh
+                    bars[i] = placeBar(releasing: bars[i].cell, ignoring: i)
                 }
             }
         }
@@ -389,8 +438,7 @@ public class M5PanelView: ScreenSaverView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
 
         // The panel face.
-        ctx.setFillColor(gray: 0.016, alpha: 1.0)
-        ctx.fill(bounds)
+        drawBackground(ctx)
 
         guard !bars.isEmpty else { return }
 

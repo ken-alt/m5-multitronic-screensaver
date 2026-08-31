@@ -13,12 +13,13 @@ import CoreText
 // about file-scope `let` crashing once the bundle is dlopen'd.
 enum CounterStyle {
     static let windowFill = CGColor(red: 0.020, green: 0.017, blue: 0.014, alpha: 1)
-    static let amber      = (r: CGFloat(0.906), g: CGFloat(0.729), b: CGFloat(0.216))
+    static let amber      = (r: CGFloat(0.965), g: CGFloat(0.820), b: CGFloat(0.290))
     static let label      = CGColor(red: 0.87, green: 0.87, blue: 0.855, alpha: 1)
 
-    /// Digit bloom: additive passes of (width multiple, alpha). The total stays
-    /// under the point where amber clips to yellow-white.
-    static let bloom: [(w: CGFloat, a: CGFloat)] = [(2.1, 0.07), (1.45, 0.13), (1.0, 0.88)]
+    /// The digits are printed on a drum and lit from outside, not emissive, so
+    /// this is a faint edge spill rather than a glow. The prop's numerals are
+    /// crisp; a big bloom is the tell that something is faked.
+    static let bloom: [(w: CGFloat, a: CGFloat)] = [(1.5, 0.05), (1.0, 1.0)]
 }
 
 /// Where the numerals come from.
@@ -113,45 +114,78 @@ final class CounterWindow {
 
     // MARK: Drawing
 
-    /// Draws the bezel, the window interior, the reading and the drum seam.
-    ///
-    /// The bezel and inner shadow are redrawn every frame. Caching them into a
-    /// CGLayer was tried and measured no faster through CoreGraphics' software
-    /// rasteriser, so the simpler code stands.
+    /// The window as a physical assembly: a cut-out in the panel, an aluminium
+    /// bezel sitting proud of it, glass, and a lit drum on its own plane
+    /// behind. Lamps sit just inside the top and bottom of the opening and
+    /// wash across the drum, the way a speedometer is lit.
     func draw(_ ctx: CGContext, in win: CGRect) {
+        let bezelW = CounterChrome.bezelWidth(forAperture: win)
+        let outer = win.insetBy(dx: -bezelW, dy: -bezelW)
+
         CounterChrome.drawBezel(ctx, around: win)
+        CounterChrome.drawDrumFace(ctx, in: win)
 
-        ctx.setFillColor(CounterStyle.windowFill)
-        ctx.fill(win)
+        let lit = drawReading(ctx, in: win)
 
-        drawReading(ctx, in: win)
+        CounterChrome.drawLampFalloff(ctx, in: win)
+        CounterChrome.drawDigitSheen(ctx, in: win, glyphs: lit)
+        CounterChrome.drawLamps(ctx, in: win)
 
-        // The drum seam: the join between the two halves of each wheel.
+        // No seam across the middle. A split-flap has one; a rotating barrel
+        // shows a continuous digit face, and the hard line read as the wrong
+        // mechanism entirely.
         ctx.setBlendMode(.normal)
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.72))
-        ctx.fill(CGRect(x: win.minX, y: win.midY - win.height * 0.016,
-                        width: win.width, height: win.height * 0.032))
-        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.07))
-        ctx.fill(CGRect(x: win.minX, y: win.midY + win.height * 0.016,
-                        width: win.width, height: win.height * 0.010))
 
+        CounterChrome.drawGloss(ctx, in: win)
         CounterChrome.drawInnerShadow(ctx, in: win)
     }
 
     /// Fixed pitch, as a counter is — but the punctuation gets a narrow cell.
-    private func advanceWidth(_ c: Character) -> CGFloat {
-        return (c == "." || c == ":") ? 0.45 : 1.0
+    static func advanceWidth(_ c: Character) -> CGFloat {
+        if c == "." || c == ":" { return 0.45 }
+        return c.isLetter ? 0.92 : 1.0
+    }
+    private func advanceWidth(_ c: Character) -> CGFloat { return CounterWindow.advanceWidth(c) }
+
+    /// Space between cells, in cell widths.
+    static let cellGap: CGFloat = 0.16
+    /// Padding inside each end of the aperture, as a fraction of its height.
+    static let padFraction: CGFloat = 0.176
+
+    /// Cell-widths `text` occupies, gaps included.
+    static func units(for text: String) -> CGFloat {
+        let chars = Array(text)
+        guard !chars.isEmpty else { return 0 }
+        let w = chars.reduce(CGFloat(0)) { $0 + advanceWidth($1) }
+        return w + cellGap * CGFloat(chars.count - 1)
     }
 
-    private func drawReading(_ ctx: CGContext, in win: CGRect) {
-        guard !slots.isEmpty else { return }
+    /// Aperture width needed to show `text` at a given digit pitch. Lets
+    /// several windows share one pitch so they read as one instrument rather
+    /// than three separately-scaled boxes.
+    static func apertureWidth(for text: String, pitch: CGFloat, height: CGFloat) -> CGFloat {
+        return pitch * units(for: text) + 2 * height * padFraction
+    }
 
-        let padX = win.width * 0.045
+    /// Draws the reading and returns the outline of every glyph it drew, so
+    /// the caller can light the numerals rather than the whole aperture.
+    @discardableResult
+    private func drawReading(_ ctx: CGContext, in win: CGRect) -> CGPath {
+        let lit = CGMutablePath()
+        guard !slots.isEmpty else { return lit }
+
+        // Proportional to height, not width: a narrow window scaled by its own
+        // width ends up with a fraction of the padding the wide one gets, and
+        // the reading sits jammed against the frame.
+        let padX = win.height * CounterWindow.padFraction
         let inner = win.insetBy(dx: padX, dy: 0)
         let units = slots.reduce(CGFloat(0)) { $0 + advanceWidth($1.current) }
-        let gap: CGFloat = 0.16                        // between cells, in units
+        let gap = CounterWindow.cellGap
         let pitch = inner.width / (units + gap * CGFloat(slots.count - 1))
-        let digitH = win.height * 0.60
+        // Cap the glyph height so the widest character still fits its cell.
+        var digitH = win.height * 0.60
+        let ratio = widestGlyphRatio()
+        if ratio > 0 { digitH = min(digitH, pitch / ratio) }
         let digitY = win.midY - digitH / 2
 
         var x = inner.minX
@@ -164,11 +198,13 @@ final class CounterWindow {
             // Widened by half the inter-cell gap: clipping tight to the cell
             // cuts the bloom off square and the edge shows.
             let bleed = pitch * gap * 0.5
+            ctx.addPath(CounterChrome.aperture(win))
+            ctx.clip()
             ctx.clip(to: CGRect(x: cell.minX - bleed, y: win.minY,
                                 width: cell.width + bleed * 2, height: win.height))
 
             if slot.roll >= 1 {
-                drawGlyph(ctx, slot.current, in: cell)
+                drawGlyph(ctx, slot.current, in: cell, collecting: lit)
             } else {
                 // The wheel turns upward: the old digit rises out of view while
                 // the new one comes up from below. Travel is just over one
@@ -176,13 +212,29 @@ final class CounterWindow {
                 // next number sits right behind the last.
                 let p = CGFloat(easeInOutCubic(slot.roll))
                 let travel = digitH * 1.30
-                drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * p))
-                drawGlyph(ctx, slot.current,  in: cell.offsetBy(dx: 0, dy: -travel * (1 - p)))
+                drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * p),
+                          collecting: lit)
+                drawGlyph(ctx, slot.current,  in: cell.offsetBy(dx: 0, dy: -travel * (1 - p)),
+                          collecting: lit)
             }
             ctx.restoreGState()
 
             x += cellW + pitch * gap
         }
+        return lit
+    }
+
+    /// Width of the widest glyph currently shown, as a multiple of digit
+    /// height. Glyph size follows the aperture height while cell width follows
+    /// the pitch, so without this the two can disagree and the reading spills
+    /// out of its cells.
+    private func widestGlyphRatio() -> CGFloat {
+        var widest: CGFloat = 0
+        for slot in slots {
+            guard let p = unitPath(slot.current) else { continue }
+            widest = max(widest, p.boundingBox.width)
+        }
+        return widest
     }
 
     /// Glyph outline for `ch` normalised into a unit box, cached per face.
@@ -214,7 +266,8 @@ final class CounterWindow {
         return p
     }
 
-    private func drawGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect) {
+    private func drawGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect,
+                           collecting lit: CGMutablePath? = nil) {
         let a = CounterStyle.amber
         ctx.saveGState()
         ctx.setBlendMode(.plusLighter)
@@ -237,16 +290,16 @@ final class CounterWindow {
                 ctx.addPath(path)
                 ctx.fillPath()
             }
+            lit?.addPath(path)
             ctx.restoreGState()
             return
         }
 
-        guard let d = ch.wholeNumberValue, (0...9).contains(d) else {
-            ctx.restoreGState(); return
-        }
-
         switch face {
         case .drum:
+            guard let d = ch.wholeNumberValue, (0...9).contains(d) else {
+                ctx.restoreGState(); return
+            }
             let path = DrumDigits.path(d, in: cell)
             let base = cell.height * DrumDigits.strokeFraction
             for (mult, alpha) in CounterStyle.bloom {
@@ -255,6 +308,9 @@ final class CounterWindow {
                 ctx.addPath(path)
                 ctx.strokePath()
             }
+            // The skeleton is a stroke, so turn it into an outline to light.
+            lit?.addPath(path.copy(strokingWithWidth: base, lineCap: .round,
+                                   lineJoin: .round, miterLimit: 10))
 
         case .font, .system:
             guard let unit = unitPath(ch) else { break }
@@ -270,6 +326,7 @@ final class CounterWindow {
                 ctx.addPath(path)
                 ctx.drawPath(using: mult > 1.0 ? .fillStroke : .fill)
             }
+            lit?.addPath(path)
         }
         ctx.restoreGState()
     }
@@ -279,118 +336,367 @@ final class CounterWindow {
 
 enum CounterChrome {
 
-    /// Polished aluminium. A single light-to-dark ramp reads as grey plastic;
-    /// what makes metal look like metal is the banding — a hot specular line
-    /// near the top, a dark mid, then a lighter band lower down where the
-    /// surroundings reflect back into the curve.
-    static func drawBezel(_ ctx: CGContext, around win: CGRect) {
-        let bezelW = win.height * 0.16
-        let outer = win.insetBy(dx: -bezelW, dy: -bezelW)
-        let radius = outer.height * 0.22
+    private static func grad(_ stops: [(CGFloat, CGColor)]) -> CGGradient? {
+        return CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                          colors: stops.map { $0.1 } as CFArray,
+                          locations: stops.map { $0.0 })
+    }
+    private static func white(_ a: CGFloat) -> CGColor {
+        return CGColor(red: 1, green: 1, blue: 1, alpha: a)
+    }
+    private static func black(_ a: CGFloat) -> CGColor {
+        return CGColor(red: 0, green: 0, blue: 0, alpha: a)
+    }
+    private static func grey(_ v: CGFloat) -> CGColor {
+        // Aluminium is very slightly warm, never neutral.
+        return CGColor(red: v, green: v * 0.995, blue: v * 0.975, alpha: 1)
+    }
 
-        let stops: [(CGFloat, CGFloat)] = [
-            (0.00, 0.62), (0.05, 0.90), (0.13, 0.99), (0.24, 0.74),
-            (0.40, 0.44), (0.52, 0.38), (0.63, 0.55), (0.78, 0.86),
-            (0.90, 0.66), (1.00, 0.34),
-        ]
-        let colors = stops.map { CGColor(red: $0.1, green: $0.1 * 0.995, blue: $0.1 * 0.975, alpha: 1) }
-        let locs = stops.map { $0.0 }
+    /// How far the bezel stands out past the aperture on every side. Layout
+    /// code must use this rather than repeating the constant, or windows end
+    /// up with overlapping frames.
+    static func bezelWidth(forAperture win: CGRect) -> CGFloat {
+        return win.height * 0.085
+    }
 
-        ctx.saveGState()
-        ctx.addPath(CGPath(roundedRect: outer, cornerWidth: radius, cornerHeight: radius, transform: nil))
+    /// The opening is rounded, following the bezel rather than cutting a hard
+    /// rectangle out of it.
+    static let apertureRadiusFraction: CGFloat = 0.19
+
+    static func apertureRadius(_ win: CGRect) -> CGFloat {
+        return win.height * apertureRadiusFraction
+    }
+
+    static func aperture(_ win: CGRect) -> CGPath {
+        let r = apertureRadius(win)
+        return CGPath(roundedRect: win, cornerWidth: r, cornerHeight: r, transform: nil)
+    }
+    private static func clipAperture(_ ctx: CGContext, _ win: CGRect) {
+        ctx.addPath(aperture(win))
         ctx.clip()
-        if let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                                 colors: colors as CFArray, locations: locs) {
-            ctx.drawLinearGradient(grad,
-                                   start: CGPoint(x: outer.minX, y: outer.maxY),
-                                   end: CGPoint(x: outer.minX, y: outer.minY),
-                                   options: [])
+    }
+
+    /// The screen itself: gloss black, the way an OLED panel reads when it is
+    /// off. Never flat — it picks up the room.
+    static func drawScreen(_ ctx: CGContext, in r: CGRect) {
+        ctx.setFillColor(CGColor(red: 0.014, green: 0.013, blue: 0.015, alpha: 1))
+        ctx.fill(r)
+        ctx.saveGState()
+        ctx.clip(to: r)
+        ctx.setBlendMode(.plusLighter)
+        if let g = grad([(0.0, white(0.028)), (0.55, white(0.007)), (1.0, white(0.0))]) {
+            ctx.drawRadialGradient(g,
+                                   startCenter: CGPoint(x: r.minX + r.width * 0.30, y: r.maxY),
+                                   startRadius: 0,
+                                   endCenter: CGPoint(x: r.minX + r.width * 0.34, y: r.maxY),
+                                   endRadius: r.width * 0.85, options: [])
         }
-        // A machined edge catches the light along the very top and bottom.
-        ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 0.99, alpha: 0.55))
-        ctx.setLineWidth(max(1, bezelW * 0.07))
-        ctx.move(to: CGPoint(x: outer.minX + radius, y: outer.maxY - bezelW * 0.03))
-        ctx.addLine(to: CGPoint(x: outer.maxX - radius, y: outer.maxY - bezelW * 0.03))
-        ctx.strokePath()
         ctx.restoreGState()
     }
 
-    /// The window opening is cut into the bezel, so its edges cast inward.
-    static func drawInnerShadow(_ ctx: CGContext, in win: CGRect) {
-        let d = win.height * 0.09
+    /// The chronometer is a separate unit sunk into the screen. This is the
+    /// hole it sits in and the faceplate that fills it — the screen surface
+    /// overhangs the top edge and catches light along the bottom.
+    static func drawUnitPlate(_ ctx: CGContext, _ plate: CGRect, screwInset: CGFloat) {
+        let r = plate.height * 0.028
+        let path = CGPath(roundedRect: plate, cornerWidth: r, cornerHeight: r, transform: nil)
+
+        // The cut-out edge: a dark line all round, so the unit reads as sunk.
         ctx.saveGState()
-        ctx.clip(to: win)
-        if let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
-                              colors: [CGColor(red: 0, green: 0, blue: 0, alpha: 0.75),
-                                       CGColor(red: 0, green: 0, blue: 0, alpha: 0.0)] as CFArray,
-                              locations: [0, 1]) {
+        ctx.setShadow(offset: .zero, blur: plate.height * 0.045, color: black(0.95))
+        ctx.setFillColor(black(1))
+        ctx.addPath(path)
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        // Faceplate: dark charcoal, very slightly lit from above.
+        if let g = grad([(0.0, grey(0.088)), (0.5, grey(0.062)), (1.0, grey(0.045))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
+                                   end: CGPoint(x: plate.minX, y: plate.minY), options: [])
+        }
+        // The screen overhangs the top of the recess and shades it.
+        if let g = grad([(0, black(0.75)), (1, black(0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.maxY),
+                                   end: CGPoint(x: plate.minX, y: plate.maxY - plate.height * 0.10),
+                                   options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
+                                   end: CGPoint(x: plate.minX + plate.width * 0.012, y: plate.minY),
+                                   options: [])
+        }
+        if let g = grad([(0, white(0.10)), (1, white(0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
+                                   end: CGPoint(x: plate.minX, y: plate.minY + plate.height * 0.035),
+                                   options: [])
+        }
+        ctx.restoreGState()
+
+        drawScrews(ctx, in: plate, inset: screwInset)
+    }
+
+    /// Panel screws, as on the prop: corners plus midpoints along the long edges.
+    static func drawScrews(_ ctx: CGContext, in plate: CGRect, inset: CGFloat) {
+        let rad = plate.height * 0.020
+        var i = 0
+        for x in [plate.minX + inset, plate.midX, plate.maxX - inset] {
+            for y in [plate.minY + inset * 0.75, plate.maxY - inset * 0.75] {
+                // Vary the driver angle; identical screws read as wallpaper.
+                Hardware.drawScrew(ctx, at: CGPoint(x: x, y: y), radius: rad,
+                                   angle: CGFloat(i) * 0.7 + 0.35)
+                i += 1
+            }
+        }
+    }
+
+    /// A rounded aluminium bezel standing a couple of millimetres proud of the
+    /// panel. The cross-section is a roll, not a flat ramp: the outer edge
+    /// turns away from the light, the crown just inside it takes the specular,
+    /// the lower slope falls into shade, then lifts again where the panel
+    /// bounces light back up into the underside.
+    static func drawBezel(_ ctx: CGContext, around win: CGRect) {
+        let bezelW = bezelWidth(forAperture: win)
+        let outer = win.insetBy(dx: -bezelW, dy: -bezelW)
+        // Concentric with the aperture: outer radius = inner radius + frame
+        // width, so the bezel is the same thickness all the way round rather
+        // than fattening at the corners. Height comes from the shading.
+        let radius = apertureRadius(win) + bezelW
+        let path = CGPath(roundedRect: outer, cornerWidth: radius, cornerHeight: radius, transform: nil)
+
+        // It stands off the panel, so it casts a real shadow downwards.
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: bezelW * 0.10, height: -bezelW * 0.62),
+                      blur: bezelW * 1.05, color: black(0.82))
+        ctx.setFillColor(grey(0.5))
+        ctx.addPath(path)
+        ctx.fillPath()
+        ctx.restoreGState()
+
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        let stops: [(CGFloat, CGFloat)] = [
+            (0.00, 0.60),   // outer edge rolling away from the light
+            (0.09, 0.96),   // crown
+            (0.22, 0.87),
+            (0.44, 0.68),
+            (0.64, 0.57),   // lower slope in shade
+            (0.82, 0.74),   // bounce off the panel
+            (0.94, 0.82),
+            (1.00, 0.44),   // underside
+        ]
+        if let g = grad(stops.map { ($0.0, grey($0.1)) }) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: outer.minX, y: outer.maxY),
+                                   end: CGPoint(x: outer.minX, y: outer.minY), options: [])
+        }
+        ctx.restoreGState()
+
+        // Silhouette: a bright hairline where the top edge catches, a dark one
+        // under the bottom. Without these the roll has no crisp boundary.
+        ctx.saveGState()
+        ctx.addPath(path)
+        ctx.clip()
+        if let g = grad([(0, white(0.55)), (1, white(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: outer.minX, y: outer.maxY),
+                                   end: CGPoint(x: outer.minX, y: outer.maxY - bezelW * 0.20),
+                                   options: [])
+        }
+        if let g = grad([(0, black(0.55)), (1, black(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: outer.minX, y: outer.minY),
+                                   end: CGPoint(x: outer.minX, y: outer.minY + bezelW * 0.22),
+                                   options: [])
+        }
+        ctx.restoreGState()
+
+        // Where the roll turns down into the aperture.
+        ctx.saveGState()
+        let innerR = apertureRadius(win)
+        let lip = CGMutablePath()
+        lip.addPath(CGPath(roundedRect: win.insetBy(dx: -bezelW * 0.42, dy: -bezelW * 0.42),
+                           cornerWidth: innerR + bezelW * 0.42,
+                           cornerHeight: innerR + bezelW * 0.42, transform: nil))
+        lip.addPath(aperture(win))
+        ctx.addPath(lip)
+        ctx.clip(using: .evenOdd)
+        if let g = grad([(0, black(0.50)), (0.45, black(0.0)), (1.0, white(0.30))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: outer.minX, y: win.maxY + bezelW * 0.42),
+                                   end: CGPoint(x: outer.minX, y: win.minY - bezelW * 0.42),
+                                   options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// The drum face behind the glass: near-black, but curved, so it is never
+    /// flat — slightly open at the top where the lamp reaches it.
+    static func drawDrumFace(_ ctx: CGContext, in win: CGRect) {
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        ctx.setFillColor(CounterStyle.windowFill)
+        ctx.fill(win)
+        let a = CounterStyle.amber
+        let warmLift = { (v: CGFloat) in
+            CGColor(red: a.r, green: a.g * 0.95, blue: a.b * 1.6, alpha: v)
+        }
+        if let g = grad([(0.0, warmLift(0.070)), (0.28, warmLift(0.020)),
+                         (0.62, warmLift(0.004)), (1.0, warmLift(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.minY), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// Lamps sit inside the top and bottom of the opening, so the drum is
+    /// brightest at its edges and falls away through the middle. Multiplied,
+    /// so it dims the digits and the drum together — they share a plane.
+    static func drawLampFalloff(_ ctx: CGContext, in win: CGRect) {
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        ctx.setBlendMode(.multiply)
+        if let g = grad([(0.0, black(0.0)), (0.28, black(0.20)),
+                         (0.50, black(0.34)), (0.72, black(0.20)), (1.0, black(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.minY), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// Light falling on the numeral faces. Clipped to the glyphs themselves,
+    /// so the digits are brightest where the lamps are — at the top and bottom
+    /// of the aperture — and fall away through the middle. Dimming the whole
+    /// aperture instead just makes everything muddy; this is what actually
+    /// reads as a lit drum.
+    static func drawDigitSheen(_ ctx: CGContext, in win: CGRect, glyphs: CGPath) {
+        guard !glyphs.isEmpty else { return }
+        let a = CounterStyle.amber
+        let warm = { (v: CGFloat) in
+            CGColor(red: min(1, a.r * 1.05), green: a.g, blue: a.b * 0.75, alpha: v)
+        }
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        ctx.addPath(glyphs)
+        ctx.clip()
+        ctx.setBlendMode(.plusLighter)
+        if let g = grad([(0.0, warm(0.62)), (0.22, warm(0.20)), (0.46, warm(0.0)),
+                         (0.58, warm(0.0)), (0.80, warm(0.16)), (1.0, warm(0.48))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.minY), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// The light itself, spilling off the lamps onto the drum.
+    static func drawLamps(_ ctx: CGContext, in win: CGRect) {
+        let a = CounterStyle.amber
+        let warm = { (v: CGFloat) in CGColor(red: a.r, green: a.g * 0.86, blue: a.b * 0.55, alpha: v) }
+        let reach = win.height * 0.22
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        ctx.setBlendMode(.plusLighter)
+        if let g = grad([(0, warm(0.065)), (1, warm(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.maxY - reach), options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
+                                   end: CGPoint(x: win.minX, y: win.minY + reach), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// Glass over the opening. A soft sheen across the upper half, brightest
+    /// towards one corner so it reads as a reflection and not a gradient.
+    static func drawGloss(_ ctx: CGContext, in win: CGRect) {
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        ctx.setBlendMode(.plusLighter)
+        if let g = grad([(0.0, white(0.085)), (0.45, white(0.020)), (1.0, white(0.0))]) {
+            ctx.drawRadialGradient(g,
+                                   startCenter: CGPoint(x: win.minX + win.width * 0.22,
+                                                        y: win.maxY + win.height * 0.30),
+                                   startRadius: 0,
+                                   endCenter: CGPoint(x: win.minX + win.width * 0.30,
+                                                      y: win.maxY),
+                                   endRadius: win.width * 0.62, options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// The opening is cut through the bezel, so its edges cast inward.
+    static func drawInnerShadow(_ ctx: CGContext, in win: CGRect) {
+        let d = win.height * 0.075
+        ctx.saveGState()
+        clipAperture(ctx, win)
+        if let g = grad([(0, black(0.62)), (1, black(0.0))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
                                    end: CGPoint(x: win.minX, y: win.maxY - d), options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
-                                   end: CGPoint(x: win.minX, y: win.minY + d * 0.7), options: [])
+                                   end: CGPoint(x: win.minX, y: win.minY + d * 0.6), options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
-                                   end: CGPoint(x: win.minX + d * 0.6, y: win.minY), options: [])
+                                   end: CGPoint(x: win.minX + d * 0.55, y: win.minY), options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: win.maxX, y: win.minY),
-                                   end: CGPoint(x: win.maxX - d * 0.6, y: win.minY), options: [])
+                                   end: CGPoint(x: win.maxX - d * 0.55, y: win.minY), options: [])
         }
         ctx.restoreGState()
     }
 
-    /// A lit LED: dark housing, an emissive lens with a hot core, a specular
-    /// highlight off the dome, and light spilling onto the panel around it.
+    /// A lit LED standing proud of the panel: contact shadow, a dark collar,
+    /// a lens with a hot off-centre core, and a specular off the dome.
     static func drawLED(_ ctx: CGContext, at c: CGPoint, radius r: CGFloat,
                         red: CGFloat, green: CGFloat, blue: CGFloat) {
-        let cs = CGColorSpaceCreateDeviceRGB()
+        // Sits above the surface, so it casts down onto the panel.
+        ctx.saveGState()
+        ctx.setShadow(offset: CGSize(width: 0, height: -r * 0.34),
+                      blur: r * 0.7, color: black(0.85))
+        ctx.setFillColor(grey(0.09))
+        ctx.fillEllipse(in: CGRect(x: c.x - r * 1.22, y: c.y - r * 1.22,
+                                   width: r * 2.44, height: r * 2.44))
+        ctx.restoreGState()
 
         // Spill onto the surrounding panel.
         ctx.saveGState()
         ctx.setBlendMode(.plusLighter)
-        if let halo = CGGradient(colorsSpace: cs,
-                                 colors: [CGColor(red: red, green: green, blue: blue, alpha: 0.30),
-                                          CGColor(red: red, green: green, blue: blue, alpha: 0.09),
-                                          CGColor(red: red, green: green, blue: blue, alpha: 0.0)] as CFArray,
-                                 locations: [0.0, 0.40, 1.0]) {
-            ctx.drawRadialGradient(halo, startCenter: c, startRadius: r * 0.8,
+        if let halo = grad([(0.0, CGColor(red: red, green: green, blue: blue, alpha: 0.26)),
+                            (0.40, CGColor(red: red, green: green, blue: blue, alpha: 0.07)),
+                            (1.0, CGColor(red: red, green: green, blue: blue, alpha: 0.0))]) {
+            ctx.drawRadialGradient(halo, startCenter: c, startRadius: r * 0.9,
                                    endCenter: c, endRadius: r * 3.0, options: [])
         }
         ctx.restoreGState()
 
-        // Housing: a dark collar the lens sits in.
-        ctx.setFillColor(CGColor(red: 0.10, green: 0.09, blue: 0.09, alpha: 1))
-        ctx.fillEllipse(in: CGRect(x: c.x - r * 1.22, y: c.y - r * 1.22,
-                                   width: r * 2.44, height: r * 2.44))
-        ctx.setStrokeColor(CGColor(red: 0.42, green: 0.41, blue: 0.40, alpha: 0.7))
-        ctx.setLineWidth(max(0.6, r * 0.07))
-        ctx.strokeEllipse(in: CGRect(x: c.x - r * 1.18, y: c.y - r * 1.18,
-                                     width: r * 2.36, height: r * 2.36))
+        // Chromed collar around the lens.
+        ctx.setStrokeColor(grey(0.46))
+        ctx.setLineWidth(max(0.7, r * 0.10))
+        ctx.strokeEllipse(in: CGRect(x: c.x - r * 1.12, y: c.y - r * 1.12,
+                                     width: r * 2.24, height: r * 2.24))
 
         // The lens: hot near the centre, deepening towards the rim.
-        let lens = CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)
         ctx.saveGState()
-        ctx.addEllipse(in: lens)
+        ctx.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
         ctx.clip()
-        if let body = CGGradient(colorsSpace: cs,
-                                 colors: [CGColor(red: min(1, red * 1.6 + 0.45),
-                                                  green: min(1, green * 1.4 + 0.42),
-                                                  blue: min(1, blue * 1.4 + 0.38), alpha: 1),
-                                          CGColor(red: min(1, red * 1.15), green: green, blue: blue, alpha: 1),
-                                          CGColor(red: red * 0.62, green: green * 0.32, blue: blue * 0.32, alpha: 1)] as CFArray,
-                                 locations: [0.0, 0.45, 1.0]) {
+        if let body = grad([(0.0, CGColor(red: min(1, red * 1.5 + 0.42),
+                                          green: min(1, green * 1.3 + 0.40),
+                                          blue: min(1, blue * 1.3 + 0.36), alpha: 1)),
+                            (0.45, CGColor(red: min(1, red * 1.12), green: green, blue: blue, alpha: 1)),
+                            (1.0, CGColor(red: red * 0.50, green: green * 0.26,
+                                          blue: blue * 0.26, alpha: 1))]) {
             ctx.drawRadialGradient(body,
                                    startCenter: CGPoint(x: c.x - r * 0.18, y: c.y + r * 0.22),
-                                   startRadius: 0,
-                                   endCenter: c, endRadius: r, options: [])
+                                   startRadius: 0, endCenter: c, endRadius: r, options: [])
         }
-        // Specular: the sharp reflection off the top of the dome.
-        if let spec = CGGradient(colorsSpace: cs,
-                                 colors: [CGColor(red: 1, green: 1, blue: 1, alpha: 0.80),
-                                          CGColor(red: 1, green: 1, blue: 1, alpha: 0.0)] as CFArray,
-                                 locations: [0, 1]) {
-            let sc = CGPoint(x: c.x - r * 0.30, y: c.y + r * 0.40)
+        if let spec = grad([(0, white(0.85)), (1, white(0.0))]) {
+            let sc = CGPoint(x: c.x - r * 0.32, y: c.y + r * 0.40)
             ctx.drawRadialGradient(spec, startCenter: sc, startRadius: 0,
-                                   endCenter: sc, endRadius: r * 0.46, options: [])
+                                   endCenter: sc, endRadius: r * 0.44, options: [])
         }
         ctx.restoreGState()
+    }
+
+    /// Rendered width of a label, so callers can space things against the real
+    /// text rather than guessing from an unrelated dimension.
+    static func labelWidth(_ text: String, size: CGFloat) -> CGFloat {
+        let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
+        let kern = size * 0.20
+        let s = NSAttributedString(string: text, attributes: [.font: font, .kern: kern])
+        return s.size().width - kern      // drop the trailing kern
     }
 
     /// Letterspaced caps, as on the prop. Helvetica ships with macOS, so
@@ -408,8 +714,6 @@ enum CounterChrome {
         let sz = s.size()
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        // The kern adds trailing space after the last glyph; pull back by it so
-        // the text is optically centred.
         s.draw(at: NSPoint(x: c.x - (sz.width - kern) / 2, y: c.y - sz.height / 2))
         NSGraphicsContext.restoreGraphicsState()
     }

@@ -31,11 +31,38 @@ enum Stardate {
     }
 }
 
-/// The 24-hour shipboard clock, shared by both savers that show one.
+/// The shipboard clock. The prop runs 24-hour; set `use24Hour` to false for a
+/// 12-hour reading, which then needs the AM/PM window beside it.
 enum ShipboardClock {
+    static let use24Hour = false
+
     static func string(_ date: Date) -> String {
         let c = Calendar.current.dateComponents([.hour, .minute, .second], from: date)
-        return String(format: "%02d:%02d:%02d", c.hour ?? 0, c.minute ?? 0, c.second ?? 0)
+        let h = c.hour ?? 0
+        if use24Hour {
+            return String(format: "%02d:%02d:%02d", h, c.minute ?? 0, c.second ?? 0)
+        }
+        let h12 = h % 12 == 0 ? 12 : h % 12
+        return String(format: "%02d:%02d:%02d", h12, c.minute ?? 0, c.second ?? 0)
+    }
+
+    /// Hours and minutes, which share a drum on the split layout.
+    static func hoursMinutes(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let h = c.hour ?? 0
+        let shown = use24Hour ? h : (h % 12 == 0 ? 12 : h % 12)
+        return String(format: "%02d:%02d", shown, c.minute ?? 0)
+    }
+
+    /// Seconds, on their own drum.
+    static func seconds(_ date: Date) -> String {
+        return String(format: "%02d", Calendar.current.component(.second, from: date))
+    }
+
+    /// Empty on a 24-hour reading, so the caller can skip the extra window.
+    static func meridiem(_ date: Date) -> String {
+        guard !use24Hour else { return "" }
+        return (Calendar.current.component(.hour, from: date) < 12) ? "AM" : "PM"
     }
 }
 
