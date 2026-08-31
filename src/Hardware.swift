@@ -206,7 +206,7 @@ enum Hardware {
 
         // Mounting plate. Narrower than the image so the nut can overhang it.
         let plate = CGRect(x: W * 0.17, y: H * 0.015, width: W * 0.66, height: H * 0.97)
-        let pr = plate.width * 0.46
+        let pr = plate.width * 0.16
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: W * 0.035, height: -W * 0.06),
                       blur: W * 0.14, color: black(0.85))

@@ -22,7 +22,7 @@ public class M5ClockView: M5PanelView {
     private var clockDrift: Double = 0
 
     /// Aperture proportion: wide rather than square, as on the prop.
-    private static let windowAspect: CGFloat = 2.2
+    private static let windowAspect: CGFloat = 2.9
 
     /// How far the module wanders, as a fraction of the smaller screen
     /// dimension. Small, because it is already close to an edge.
@@ -45,8 +45,8 @@ public class M5ClockView: M5PanelView {
     /// The module plate for a given drift offset. Derived from `bounds` only,
     /// so it is safe to call before the subclass is fully set up.
     private func plate(offsetBy d: CGSize) -> CGRect {
-        let w = min(bounds.width * 0.340, bounds.height * 0.68)
-        let h = w * 0.235
+        let w = min(bounds.width * 0.380, bounds.height * 0.76)
+        let h = w * 0.185
         return CGRect(x: bounds.midX - w / 2 + d.width,
                       y: bounds.maxY - h - bounds.height * 0.055 + d.height,
                       width: w, height: h)
@@ -111,7 +111,7 @@ public class M5ClockView: M5PanelView {
         let winH = p.height * 0.40
         let winY = p.maxY - p.height * 0.70
         let content = p.width * 0.88
-        let bezelW = CounterChrome.bezelWidth(forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
+        let bezelW = CounterChrome.bezelSideWidth(forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
         let gap = bezelW * 2 + winH * 0.16
 
         let stamp = Date()
@@ -124,7 +124,10 @@ public class M5ClockView: M5PanelView {
         // rather than character count and the drums look like one instrument.
         // The switch shares the readout row rather than taking a second one.
         // Sized by height: the plate is 2.35x as tall as it is wide.
-        let togS = winH * 0.55
+        // The switch plate stands the same height as the readout frames.
+        let frameH = winH + 2 * CounterChrome.bezelWidth(
+            forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
+        let togS = frameH / Hardware.toggleAspect
         let capSize = winH * 0.185
         let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
                        CounterChrome.labelWidth("SWITCH", size: capSize))

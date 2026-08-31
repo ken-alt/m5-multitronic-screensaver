@@ -18,10 +18,24 @@ enum CounterStyle {
     static let amber      = (r: CGFloat(0.965), g: CGFloat(0.820), b: CGFloat(0.290))
     static let label      = CGColor(red: 0.87, green: 0.87, blue: 0.855, alpha: 1)
 
+    /// The original prop reads the other way round: dark numerals printed on
+    /// pale drums behind a white mask, rather than lit numerals on a dark one.
+    static let retroDrum = CGColor(red: 0.880, green: 0.834, blue: 0.716, alpha: 1)
+    static let retroInk  = CGColor(red: 0.086, green: 0.082, blue: 0.074, alpha: 1)
+    static let retroMask = CGColor(red: 0.905, green: 0.901, blue: 0.889, alpha: 1)
+
     /// The digits are printed on a drum and lit from outside, not emissive, so
     /// this is a faint edge spill rather than a glow. The prop's numerals are
     /// crisp; a big bloom is the tell that something is faked.
     static let bloom: [(w: CGFloat, a: CGFloat)] = [(1.5, 0.05), (1.0, 1.0)]
+}
+
+/// Which construction the window is built as.
+enum CounterFinish {
+    /// Lit amber numerals on a dark drum, as the remastered episode shows.
+    case modern
+    /// Dark numerals on pale drums behind a white mask, as the original prop.
+    case retro
 }
 
 /// Where the numerals come from.
@@ -90,6 +104,8 @@ final class CounterWindow {
     /// its own aperture, so several windows can share one digit size. Without
     /// it, an equal-width window holding two characters draws them far larger
     /// than one holding five.
+    var finish: CounterFinish = .modern
+
     var fixedPitch: CGFloat?
 
     /// When set, overrides the glyph height. The fit cap below is computed per
@@ -113,6 +129,14 @@ final class CounterWindow {
     /// Glyph outlines normalised to a unit box, built once per face. Kept per
     /// instance rather than in a static so there is no shared mutable state.
     private var unitPaths: [Character: CGPath] = [:]
+    /// Horizontal extent of the drums from the last draw, so the mask cutout
+    /// can be sized to expose exactly that and no more.
+    private var drumExtent: (CGFloat, CGFloat)?
+
+    /// Glyph height from the last draw. The mask opening is derived from it —
+    /// a fixed fraction of aperture height cannot know how tall the numerals
+    /// ended up and will crop them once the proportions change.
+    private var lastDigitHeight: CGFloat = 0
 
     func set(_ text: String, animated: Bool = true) {
         let chars = Array(text)
@@ -141,23 +165,28 @@ final class CounterWindow {
     /// wash across the drum, the way a speedometer is lit.
     func draw(_ ctx: CGContext, in win: CGRect) {
         let bezelW = CounterChrome.bezelWidth(forAperture: win)
-        let outer = win.insetBy(dx: -bezelW, dy: -bezelW)
+        let outer = win.insetBy(dx: -CounterChrome.bezelSideWidth(forAperture: win), dy: -bezelW)
 
-        CounterChrome.drawBezel(ctx, around: win)
-        CounterChrome.drawDrumFace(ctx, in: win)
+        CounterChrome.drawBezel(ctx, around: win, finish: finish)
+        CounterChrome.drawDrumFace(ctx, in: win, finish: finish)
 
         let lit = drawReading(ctx, in: win)
 
-        CounterChrome.drawLampFalloff(ctx, in: win)
-        CounterChrome.drawDigitSheen(ctx, in: win, glyphs: lit)
-        CounterChrome.drawLamps(ctx, in: win)
+        if finish == .modern {
+            CounterChrome.drawLampFalloff(ctx, in: win)
+            CounterChrome.drawDigitSheen(ctx, in: win, glyphs: lit)
+            CounterChrome.drawLamps(ctx, in: win)
+        } else {
+            CounterChrome.drawRetroShading(ctx, in: win)
+        }
 
         // No seam across the middle. A split-flap has one; a rotating barrel
         // shows a continuous digit face, and the hard line read as the wrong
         // mechanism entirely.
         ctx.setBlendMode(.normal)
 
-        CounterChrome.drawLetterbox(ctx, in: win)
+        CounterChrome.drawLetterbox(ctx, in: win, finish: finish,
+                                    cutout: drumExtent, digitHeight: lastDigitHeight)
         CounterChrome.drawGloss(ctx, in: win)
         CounterChrome.drawInnerShadow(ctx, in: win)
     }
@@ -211,12 +240,15 @@ final class CounterWindow {
             let ratio = widestGlyphRatio()
             if ratio > 0 { digitH = min(digitH, pitch * CounterWindow.glyphFit / ratio) }
         }
+        lastDigitHeight = digitH
         let digitY = win.midY - digitH / 2
 
         // Centre the reading in the aperture: with every window the same size,
         // a two-character reading would otherwise sit hard against the left.
         let readingW = pitch * units + pitch * gap * CGFloat(max(0, slots.count - 1))
         var boundaries: [CGFloat] = []
+        var extentLo: CGFloat = 0
+        var extentHi: CGFloat = 0
         var x = inner.minX + max(0, inner.width - readingW) / 2
         for (slotIndex, slot) in slots.enumerated() {
             let cellW = pitch * advanceWidth(slot.current)
@@ -255,9 +287,14 @@ final class CounterWindow {
             // Bound every drum on both sides, so the outer wheels are the
             // same width as the inner ones rather than running to the edge.
             let edge = pitch * gap * (splitsBetweenCharacters ? 0.5 : 1.1)
-            if slotIndex == 0 { boundaries.append(x - edge) }
+            let boundsOuter = finish != .retro
+            if slotIndex == 0 {
+                if boundsOuter { boundaries.append(x - edge) }
+                extentLo = x - edge
+            }
             if slotIndex == slots.count - 1 {
-                boundaries.append(x + cellW + edge)
+                if boundsOuter { boundaries.append(x + cellW + edge) }
+                extentHi = x + cellW + edge
             } else if splitsBetweenCharacters {
                 boundaries.append(x + cellW + pitch * gap * 0.5)
             }
@@ -269,14 +306,56 @@ final class CounterWindow {
         ctx.saveGState()
         CounterChrome.clipApertureFor(ctx, win)
         ctx.setBlendMode(.normal)
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.72))
-        let sepW = max(1, win.height * 0.014)
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0,
+                                 alpha: finish == .retro ? 0.88 : 0.72))
+        let sepW = max(1, win.height * (finish == .retro ? 0.020 : 0.014))
+        drumExtent = (extentLo, extentHi)
         for bx in boundaries {
             ctx.fill(CGRect(x: bx - sepW / 2, y: win.minY, width: sepW, height: win.height))
         }
         ctx.restoreGState()
 
         return lit
+    }
+
+    /// Printed numerals: a flat dark shape on the drum, no glow at all.
+    private func drawInkGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect,
+                              collecting lit: CGMutablePath?) {
+        ctx.saveGState()
+        ctx.setBlendMode(.normal)
+        ctx.setLineCap(.round)
+        ctx.setLineJoin(.round)
+        ctx.setFillColor(CounterStyle.retroInk)
+        ctx.setStrokeColor(CounterStyle.retroInk)
+
+        if ch == "." || ch == ":" {
+            ctx.addPath(ch == ":" ? DrumDigits.colonPath(in: cell) : DrumDigits.dotPath(in: cell))
+            ctx.fillPath()
+            ctx.restoreGState()
+            return
+        }
+        switch face {
+        case .drum:
+            if let d = ch.wholeNumberValue, (0 ... 9).contains(d) {
+                let path = DrumDigits.path(d, in: cell)
+                ctx.setLineWidth(cell.height * DrumDigits.strokeFraction)
+                ctx.addPath(path)
+                ctx.strokePath()
+                lit?.addPath(path.copy(strokingWithWidth: cell.height * DrumDigits.strokeFraction,
+                                       lineCap: .round, lineJoin: .round, miterLimit: 10))
+            }
+        case .font, .system:
+            if let unit = unitPath(ch) {
+                var t = CGAffineTransform(scaleX: cell.height, y: cell.height)
+                    .concatenating(CGAffineTransform(translationX: cell.midX, y: cell.midY))
+                if let path = unit.copy(using: &t) {
+                    ctx.addPath(path)
+                    ctx.fillPath()
+                    lit?.addPath(path)
+                }
+            }
+        }
+        ctx.restoreGState()
     }
 
     /// Width of the widest glyph currently shown, as a multiple of digit
@@ -323,6 +402,7 @@ final class CounterWindow {
 
     private func drawGlyph(_ ctx: CGContext, _ ch: Character, in cell: CGRect,
                            collecting lit: CGMutablePath? = nil) {
+        if finish == .retro { drawInkGlyph(ctx, ch, in: cell, collecting: lit); return }
         let a = CounterStyle.amber
         ctx.saveGState()
         ctx.setBlendMode(.plusLighter)
@@ -407,12 +487,26 @@ enum CounterChrome {
     /// code must use this rather than repeating the constant, or windows end
     /// up with overlapping frames.
     static func bezelWidth(forAperture win: CGRect) -> CGFloat {
-        return win.height * 0.085
+        return win.height * 0.135
+    }
+
+    /// The frame is wider at the sides than top and bottom, which is what makes
+    /// the dark inner edge legible instead of a hairline.
+    static let bezelSideFactor: CGFloat = 1.75
+
+    /// The outer edge is squarer than the aperture — a stamped frame rather
+    /// than a moulded one — so it is not simply the inner radius plus the
+    /// frame width. The frame thickens a little at the corners as a result,
+    /// which is what a pressed bezel actually does.
+    static let outerRadiusFactor: CGFloat = 0.42
+
+    static func bezelSideWidth(forAperture win: CGRect) -> CGFloat {
+        return bezelWidth(forAperture: win) * bezelSideFactor
     }
 
     /// The opening is rounded, following the bezel rather than cutting a hard
     /// rectangle out of it.
-    static let apertureRadiusFraction: CGFloat = 0.19
+    static let apertureRadiusFraction: CGFloat = 0.10
 
     static func apertureRadius(_ win: CGRect) -> CGFloat {
         return win.height * apertureRadiusFraction
@@ -509,14 +603,18 @@ enum CounterChrome {
     /// turns away from the light, the crown just inside it takes the specular,
     /// the lower slope falls into shade, then lifts again where the panel
     /// bounces light back up into the underside.
-    static func drawBezel(_ ctx: CGContext, around win: CGRect) {
+    static func drawBezel(_ ctx: CGContext, around win: CGRect,
+                          finish: CounterFinish = .modern) {
         let bezelW = bezelWidth(forAperture: win)
-        let outer = win.insetBy(dx: -bezelW, dy: -bezelW)
-        // Concentric with the aperture: outer radius = inner radius + frame
-        // width, so the bezel is the same thickness all the way round rather
-        // than fattening at the corners. Height comes from the shading.
-        let radius = apertureRadius(win) + bezelW
-        let path = CGPath(roundedRect: outer, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        let sideW = bezelSideWidth(forAperture: win)
+        let outer = win.insetBy(dx: -sideW, dy: -bezelW)
+        // Concentric with the aperture: each corner radius is the inner radius
+        // plus that axis' frame width, so the frame keeps its thickness round
+        // the corners rather than fattening. Height comes from the shading.
+        let path = CGPath(roundedRect: outer,
+                          cornerWidth: (apertureRadius(win) + sideW) * outerRadiusFactor,
+                          cornerHeight: (apertureRadius(win) + bezelW) * outerRadiusFactor,
+                          transform: nil)
 
         // It stands off the panel, so it casts a real shadow downwards.
         ctx.saveGState()
@@ -530,7 +628,12 @@ enum CounterChrome {
         ctx.saveGState()
         ctx.addPath(path)
         ctx.clip()
-        let stops: [(CGFloat, CGFloat)] = [
+        // The original's frame is brighter and flatter — polished trim rather
+        // than a heavy machined roll.
+        let stops: [(CGFloat, CGFloat)] = finish == .retro ? [
+            (0.00, 0.74), (0.10, 0.97), (0.26, 0.90), (0.50, 0.78),
+            (0.72, 0.84), (0.90, 0.92), (1.00, 0.62),
+        ] : [
             (0.00, 0.60),   // outer edge rolling away from the light
             (0.09, 0.96),   // crown
             (0.22, 0.87),
@@ -563,6 +666,15 @@ enum CounterChrome {
         }
         ctx.restoreGState()
 
+        if finish == .retro {
+            // The prop has a fine dark line just inside the trim, where the
+            // glass is held.
+            ctx.setStrokeColor(black(0.92))
+            ctx.setLineWidth(max(1, bezelW * 0.30))
+            ctx.addPath(aperture(win.insetBy(dx: -bezelW * 0.15, dy: -bezelW * 0.15)))
+            ctx.strokePath()
+        }
+
         // Where the roll turns down into the aperture.
         ctx.saveGState()
         let innerR = apertureRadius(win)
@@ -583,9 +695,16 @@ enum CounterChrome {
 
     /// The drum face behind the glass: near-black, but curved, so it is never
     /// flat — slightly open at the top where the lamp reaches it.
-    static func drawDrumFace(_ ctx: CGContext, in win: CGRect) {
+    static func drawDrumFace(_ ctx: CGContext, in win: CGRect,
+                             finish: CounterFinish = .modern) {
         ctx.saveGState()
         clipAperture(ctx, win)
+        if finish == .retro {
+            ctx.setFillColor(CounterStyle.retroDrum)
+            ctx.fill(win)
+            ctx.restoreGState()
+            return
+        }
         ctx.setFillColor(CounterStyle.windowFill)
         ctx.fill(win)
         let a = CounterStyle.amber
@@ -659,10 +778,55 @@ enum CounterChrome {
     /// The aperture is a slot onto a cylinder, not a flat panel: above and
     /// below the lit slice the drum curves away out of sight. Without these
     /// bands the surface reads as a rectangle of grey behind a frame.
-    static func drawLetterbox(_ ctx: CGContext, in win: CGRect) {
-        let band = win.height * 0.17
+    static func drawLetterbox(_ ctx: CGContext, in win: CGRect,
+                              finish: CounterFinish = .modern,
+                              cutout: (CGFloat, CGFloat)? = nil,
+                              digitHeight: CGFloat = 0) {
+        // Sized from the numerals, not from the aperture: the opening has to
+        // clear the digits with margin whatever the proportions are.
+        let want = win.height * (finish == .retro ? 0.235 : 0.17)
+        let clearance = digitHeight * (finish == .retro ? 1.34 : 1.22)
+        let band = digitHeight > 0
+            ? max(0, min(want, (win.height - clearance) / 2))
+            : want
         ctx.saveGState()
         clipAperture(ctx, win)
+        if finish == .retro {
+            // One piece of mask with a single cutout, rather than four fills
+            // meeting at seams — those joins were showing as lines across the
+            // white. The cutout stops where the drums stop.
+            let lo = cutout.map { max(win.minX, $0.0) } ?? win.minX
+            let hi = cutout.map { min(win.maxX, $0.1) } ?? win.maxX
+            let slot = CGRect(x: lo, y: win.minY + band,
+                              width: max(0, hi - lo), height: win.height - band * 2)
+
+            let mask = CGMutablePath()
+            mask.addRect(win)
+            mask.addRect(slot)
+            ctx.addPath(mask)
+            ctx.setFillColor(CounterStyle.retroMask)
+            ctx.fillPath(using: .evenOdd)
+
+            // The cut edge sits above the drums, so it shades them just inside
+            // the opening — all four sides, and only within the opening.
+            ctx.saveGState()
+            ctx.clip(to: slot)
+            if let g = grad([(0.0, black(0.36)), (1.0, black(0.0))]) {
+                let d = win.height * 0.05
+                ctx.drawLinearGradient(g, start: CGPoint(x: slot.minX, y: slot.maxY),
+                                       end: CGPoint(x: slot.minX, y: slot.maxY - d), options: [])
+                ctx.drawLinearGradient(g, start: CGPoint(x: slot.minX, y: slot.minY),
+                                       end: CGPoint(x: slot.minX, y: slot.minY + d), options: [])
+                ctx.drawLinearGradient(g, start: CGPoint(x: slot.minX, y: slot.minY),
+                                       end: CGPoint(x: slot.minX + d * 0.7, y: slot.minY), options: [])
+                ctx.drawLinearGradient(g, start: CGPoint(x: slot.maxX, y: slot.minY),
+                                       end: CGPoint(x: slot.maxX - d * 0.7, y: slot.minY), options: [])
+            }
+            ctx.restoreGState()
+            ctx.restoreGState()
+            return
+        }
+
         // Not quite black — a cylinder turning away still catches a little.
         let deep = CGColor(red: 0.030, green: 0.026, blue: 0.020, alpha: 1.0)
         let fade = CGColor(red: 0.030, green: 0.026, blue: 0.020, alpha: 0.0)
@@ -671,6 +835,39 @@ enum CounterChrome {
                                    end: CGPoint(x: win.minX, y: win.maxY - band), options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
                                    end: CGPoint(x: win.minX, y: win.minY + band), options: [])
+        }
+        ctx.restoreGState()
+    }
+
+    /// Form shading for a pale drum. The cylinder is nearest the viewer through
+    /// the middle and turns away above and below, so it darkens towards the
+    /// slot edges — the opposite of the lit-from-the-edges dark drum. Applied
+    /// over the numerals too, since they are printed on the surface.
+    static func drawRetroShading(_ ctx: CGContext, in win: CGRect) {
+        ctx.saveGState()
+        clipAperture(ctx, win)
+
+        // The lamps sit behind the mask and spill onto the drums at the slot
+        // edges — strongly along the top, a little along the bottom — so the
+        // surface is dimmest through the middle. Multiplied, because the
+        // numerals are printed on that surface and share its light.
+        ctx.setBlendMode(.multiply)
+        if let g = grad([(0.0, black(0.0)), (0.20, black(0.05)), (0.50, black(0.24)),
+                         (0.80, black(0.11)), (1.0, black(0.03))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.minY), options: [])
+        }
+
+        // Warm spill where the light actually enters.
+        ctx.setBlendMode(.plusLighter)
+        let warm = { (v: CGFloat) in CGColor(red: 0.60, green: 0.44, blue: 0.16, alpha: v) }
+        if let g = grad([(0.0, warm(0.13)), (1.0, warm(0.0))]) {
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.maxY),
+                                   end: CGPoint(x: win.minX, y: win.maxY - win.height * 0.42),
+                                   options: [])
+            ctx.drawLinearGradient(g, start: CGPoint(x: win.minX, y: win.minY),
+                                   end: CGPoint(x: win.minX, y: win.minY + win.height * 0.22),
+                                   options: [])
         }
         ctx.restoreGState()
     }
