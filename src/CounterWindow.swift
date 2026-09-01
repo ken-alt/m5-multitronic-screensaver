@@ -604,11 +604,12 @@ enum CounterChrome {
     /// once and blitted, with margin around it for the shadow to fall into.
     private static var plateCache: [String: CGImage] = [:]
 
-    static func drawUnitPlate(_ ctx: CGContext, _ plate: CGRect, screwInset: CGFloat) {
+    static func drawUnitPlate(_ ctx: CGContext, _ plate: CGRect, screwInset: CGFloat,
+                              centreScrews: Bool = true) {
         let pad = (plate.height * 0.12).rounded()
         let w = Int((plate.width + pad * 2).rounded())
         let h = Int((plate.height + pad * 2).rounded())
-        let key = "\(w)x\(h)-\(Int(screwInset.rounded()))"
+        let key = "\(w)x\(h)-\(Int(screwInset.rounded()))-\(centreScrews)"
         if let img = plateCache[key] {
             ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
             return
@@ -618,18 +619,21 @@ enum CounterChrome {
                               bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
                               bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
             let local = CGRect(x: pad, y: pad, width: plate.width, height: plate.height)
-            drawUnitPlateDirect(lc, local, screwInset: screwInset)
+            drawUnitPlateDirect(lc, local, screwInset: screwInset,
+                                centreScrews: centreScrews)
             if let img = lc.makeImage() {
                 plateCache[key] = img
                 ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
                 return
             }
         }
-        drawUnitPlateDirect(ctx, plate, screwInset: screwInset)
+        drawUnitPlateDirect(ctx, plate, screwInset: screwInset,
+                            centreScrews: centreScrews)
     }
 
     private static func drawUnitPlateDirect(_ ctx: CGContext, _ plate: CGRect,
-                                            screwInset: CGFloat) {
+                                            screwInset: CGFloat,
+                                            centreScrews: Bool) {
         let r = plate.height * 0.028
         let path = CGPath(roundedRect: plate, cornerWidth: r, cornerHeight: r, transform: nil)
 
@@ -705,14 +709,17 @@ enum CounterChrome {
         ctx.strokePath()
         ctx.restoreGState()
 
-        drawScrews(ctx, in: plate, inset: screwInset)
+        drawScrews(ctx, in: plate, inset: screwInset, centres: centreScrews)
     }
 
     /// Panel screws, as on the prop: corners plus midpoints along the long edges.
-    static func drawScrews(_ ctx: CGContext, in plate: CGRect, inset: CGFloat) {
+    static func drawScrews(_ ctx: CGContext, in plate: CGRect, inset: CGFloat,
+                           centres: Bool = true) {
         let rad = plate.height * 0.020
         var i = 0
-        for x in [plate.minX + inset, plate.midX, plate.maxX - inset] {
+        let columns = centres ? [plate.minX + inset, plate.midX, plate.maxX - inset]
+                              : [plate.minX + inset, plate.maxX - inset]
+        for x in columns {
             for y in [plate.minY + inset * 0.75, plate.maxY - inset * 0.75] {
                 // Vary the driver angle; identical screws read as wallpaper.
                 Hardware.drawScrew(ctx, at: CGPoint(x: x, y: y), radius: rad,

@@ -185,7 +185,9 @@ public class ChronometerView: ScreenSaverView {
                        y: bounds.midY - plateH / 2 + dy,
                        width: plateW, height: plateH)
 
-        CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.035)
+        // No centre screws: the switch and its legend occupy that column.
+        CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.035,
+                                    centreScrews: false)
 
         let winH = winHeight
         let winY = p.maxY - p.height * 0.60
@@ -238,12 +240,14 @@ public class ChronometerView: ScreenSaverView {
         // two captions. A static fitting, like the screws.
         if showsLightSwitch {
             let togS = p.height * 0.112
-            let capSize = p.height * 0.052
+            let capSize = p.height * 0.038
             let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
                            CounterChrome.labelWidth("SWITCH", size: capSize))
+            // The switch itself sits on the centre line, as on the prop, with
+            // the legend running off to its right.
             let capClear = togS * 0.45
-            let groupW = togS + capClear + capW
-            let togX = p.midX - groupW / 2 + togS / 2
+            _ = capW
+            let togX = p.midX
             let rowY = p.minY + p.height * 0.155
             Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
             CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
