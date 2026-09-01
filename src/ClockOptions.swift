@@ -31,23 +31,25 @@ final class ClockOptions: NSObject {
             return w
         }
 
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 148),
+        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 164),
                          styleMask: [.titled], backing: .buffered, defer: false)
-        let content = NSView(frame: w.contentLayoutRect)
+        // Sized to the content rect, not contentLayoutRect - the latter
+        // excludes the title bar, which pushed the buttons off the bottom.
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: 164))
 
         let title = NSTextField(labelWithString: "Shipboard Clock")
         title.font = .systemFont(ofSize: 15, weight: .semibold)
-        title.frame = NSRect(x: 24, y: 104, width: 332, height: 22)
+        title.frame = NSRect(x: 24, y: 122, width: 332, height: 22)
 
         let caption = NSTextField(labelWithString: "Time format")
         caption.font = .systemFont(ofSize: 12)
         caption.textColor = .secondaryLabelColor
-        caption.frame = NSRect(x: 24, y: 80, width: 120, height: 18)
+        caption.frame = NSRect(x: 24, y: 98, width: 120, height: 18)
 
         let seg = NSSegmentedControl(labels: ["12-hour", "24-hour"],
                                      trackingMode: .selectOne,
                                      target: nil, action: nil)
-        seg.frame = NSRect(x: 22, y: 48, width: 200, height: 24)
+        seg.frame = NSRect(x: 22, y: 66, width: 200, height: 24)
         seg.selectedSegment = ShipboardClock.use24Hour ? 1 : 0
         format = seg
 
@@ -57,16 +59,16 @@ final class ClockOptions: NSObject {
         let note = NSTextField(labelWithString: "24-hour hides the AM/PM window.")
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
-        note.frame = NSRect(x: 24, y: 28, width: 332, height: 16)
+        note.frame = NSRect(x: 24, y: 46, width: 332, height: 16)
 
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
         cancel.bezelStyle = .rounded
-        cancel.frame = NSRect(x: 188, y: -4, width: 84, height: 32)
+        cancel.frame = NSRect(x: 186, y: 12, width: 84, height: 32)
         cancel.keyEquivalent = "\u{1b}"
 
         let ok = NSButton(title: "OK", target: self, action: #selector(accept(_:)))
         ok.bezelStyle = .rounded
-        ok.frame = NSRect(x: 276, y: -4, width: 84, height: 32)
+        ok.frame = NSRect(x: 274, y: 12, width: 84, height: 32)
         ok.keyEquivalent = "\r"
 
         for v in [title, caption, seg, note, cancel, ok] as [NSView] { content.addSubview(v) }

@@ -46,6 +46,15 @@ public class M5ClockView: M5PanelView {
         return ClockOptions.shared.sheet(for: self)
     }
 
+    @objc private func preferencesChanged(_ n: Notification) {
+        ShipboardClock.reloadPreferences()
+        optionsChanged()
+    }
+
+    deinit {
+        DistributedNotificationCenter.default().removeObserver(self)
+    }
+
     /// Drops the cached chrome so the next frame rebuilds it. Switching to a
     /// 24-hour reading removes the meridiem window entirely, which changes the
     /// module's width and how the readouts centre.
@@ -58,8 +67,20 @@ public class M5ClockView: M5PanelView {
         setNeedsDisplay(bounds)
     }
 
+    public override func startAnimation() {
+        // Re-read rather than trust what this process cached: the setting may
+        // have been changed from the configure sheet in another process since
+        // this view was built.
+        ShipboardClock.reloadPreferences()
+        optionsChanged()
+        super.startAnimation()
+    }
+
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
+        DistributedNotificationCenter.default().addObserver(
+            self, selector: #selector(preferencesChanged(_:)),
+            name: ShipboardClock.changedNotification, object: nil)
         let face = DigitFacePreference.best()
         for w in [hoursMins, seconds, meridiem] {
             w.face = face

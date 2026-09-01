@@ -32,7 +32,7 @@ The M-5 computer readout field on its own.
 
 The field with the clock module, built as the original prop: ink on pale wheels behind a white mask, turning on an arc.
 
-**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 186 KB
+**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 187 KB
 
 ### M-5 Multitronic with Clock - Remaster
 
@@ -40,7 +40,7 @@ The field with the clock module, built as the original prop: ink on pale wheels 
 
 The field with the clock module as the remastered episode shows it: amber numerals lit from within, on black.
 
-**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 184 KB
+**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 186 KB
 
 ### TOS Chronometer - Classic
 
@@ -121,6 +121,37 @@ wheels are the same width, so the punctuation gets a full cell.
 |---|---|
 | ![](docs/clock-classic.png) | ![](docs/clock-remaster.png) |
 | Classic | Remaster |
+
+## Stardate
+
+The chronometers show a stardate because it is fun, not because it is
+authoritative. TOS stardates were arbitrary by design — the writers' guide told
+writers to pick any four digits and a decimal, and the show contradicts itself
+constantly. There is nothing to derive.
+
+So this uses the convention the later series settled on: **1000 units to the
+year**, counted from 1000.0 at 2020-01-01 UTC.
+
+```
+today    7667.5
++1 day   7670.2
++1 year  8667.5
+```
+
+Note what that means on screen: the tenth advances roughly **every 53 minutes**.
+Watch the panel for a minute and the stardate will not move. That is correct
+rather than broken — it is a date, sampled once a frame like everything else,
+and a date does not tick.
+
+An earlier version ran at 1.0/day, which put the same digit at one change every
+2.4 hours. Both are effectively static to a viewer; the current rate is at least
+a convention someone else chose. Making it visibly tick would mean inventing a
+rate from nothing, which buys motion at the cost of the only thing about the
+number that is defensible.
+
+It never sets the readout's width, incidentally — the shipboard reading is
+eight characters against the stardate's six, so the shared digit pitch is
+always driven by the clock beside it.
 
 ## References
 

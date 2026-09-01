@@ -16,7 +16,16 @@ import Cocoa
 /// constants to re-base it.
 enum Stardate {
     static let epochValue: Double = 1000.0
-    static let perDay: Double = 1.0
+
+    /// A thousand units to the year, the rate the later series settled on.
+    /// Expressed as the division rather than the quotient so the convention is
+    /// legible: 2.7379 on its own says nothing.
+    ///
+    /// This moves the displayed tenth every ~53 minutes. It is a readout, not
+    /// a second hand — a rate fast enough to watch would mean inventing one,
+    /// and there is no scheme to invent it from. TOS stardates were arbitrary
+    /// by design.
+    static let perDay: Double = 1000.0 / 365.25
     static let epochDate: Date = {
         var c = DateComponents()
         c.year = 2020; c.month = 1; c.day = 1
@@ -44,6 +53,17 @@ enum ShipboardClock {
 
     private static var cached24: Bool?
 
+    /// Posted when the setting changes. The configure sheet and the running
+    /// saver are different processes, so a preview that has already read the
+    /// value would otherwise keep showing the old one until it was restarted.
+    static let changedNotification = Notification.Name("local.ken.screensaver.clockOptionsChanged")
+
+    /// Drops the cached value so the next read comes from disk.
+    static func reloadPreferences() {
+        cached24 = nil
+        defaults?.synchronize()
+    }
+
     static var use24Hour: Bool {
         get {
             if let c = cached24 { return c }
@@ -55,6 +75,8 @@ enum ShipboardClock {
             cached24 = newValue
             defaults?.set(newValue, forKey: "use24Hour")
             defaults?.synchronize()
+            DistributedNotificationCenter.default().postNotificationName(
+                changedNotification, object: nil, userInfo: nil, deliverImmediately: true)
         }
     }
 
