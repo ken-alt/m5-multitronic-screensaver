@@ -25,6 +25,11 @@ public class M5ClockView: M5PanelView {
     /// configured, so both eras ship as separate screensavers.
     var readoutFinish: CounterFinish { return .modern }
 
+    /// The light switch is part of the mechanical panel. An emissive readout
+    /// has no lamp to switch, so the Remaster does without it and the clock
+    /// recentres over the plate on its own — the switch slot falls to zero.
+    var showsLightSwitch: Bool { return readoutFinish == .retro }
+
     /// Aperture proportion: wide rather than square, as on the prop.
     private static let windowAspect: CGFloat = 2.9
 
@@ -135,7 +140,7 @@ public class M5ClockView: M5PanelView {
         let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
                        CounterChrome.labelWidth("SWITCH", size: capSize))
         let capClear = togS * 0.42
-        let togSlot = togS + capClear + capW + gap
+        let togSlot = showsLightSwitch ? (togS + capClear + capW + gap) : 0
 
         // Every window the same size and a chosen proportion. Dividing up
         // whatever space is left over gives the apertures an arbitrary shape —
@@ -203,11 +208,13 @@ public class M5ClockView: M5PanelView {
 
         // Light switch alongside the readouts, legend set to its right in two
         // lines as on the prop. A static fitting, like the screws.
-        let togX = p.midX + groupW / 2 - togSlot + gap + togS / 2
-        let rowMidY = winY + winH / 2
-        Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowMidY), scale: togS)
-        CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
-                                 leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowMidY),
-                                 size: capSize, etched: true)
+        if showsLightSwitch {
+            let togX = p.midX + groupW / 2 - togSlot + gap + togS / 2
+            let rowMidY = winY + winH / 2
+            Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowMidY), scale: togS)
+            CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
+                                     leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowMidY),
+                                     size: capSize, etched: true)
+        }
     }
 }

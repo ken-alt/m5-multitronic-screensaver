@@ -12,7 +12,51 @@ referenced.
 | **M-5 Multitronic with Clock — Remaster** | the field with a clock module |
 | **M-5 Multitronic with Clock — Classic** | the same, original-prop finish |
 
+## Download
+
+Each is a ready-built universal bundle. Unzip, double-click to install (or drop
+into `~/Library/Screen Savers/`), then pick it in System Settings → Screen
+Saver, under Other.
+
+### M-5 Multitronic
+
 ![](docs/m5-multitronic.png)
+
+The M-5 computer readout field on its own.
+
+**[Download M-5 Multitronic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic.saver.zip)** · 39 KB
+
+### M-5 Multitronic with Clock - Classic
+
+![](docs/clock-classic.png)
+
+The field with the clock module, built as the original prop: ink on pale wheels behind a white mask, with a light switch.
+
+**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 172 KB
+
+### M-5 Multitronic with Clock - Remaster
+
+![](docs/clock-remaster.png)
+
+The field with the clock module as the remastered episode shows it: amber numerals lit from within, on black.
+
+**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 160 KB
+
+### TOS Chronometer - Classic
+
+![](docs/chronometer-classic.png)
+
+Stardate and ship's time, original prop.
+
+**[Download TOS Chronometer - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Classic.saver.zip)** · 125 KB
+
+### TOS Chronometer - Remaster
+
+![](docs/chronometer-remaster.png)
+
+Stardate and ship's time, remastered finish.
+
+**[Download TOS Chronometer - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Remaster.saver.zip)** · 112 KB
 
 ## Two eras of the same prop
 
@@ -89,6 +133,18 @@ Requires Xcode for the current SDK.
 Then pick one in System Settings → Screen Saver, under Other. Run the same line
 again to reinstall; if a saver is already selected, `killall legacyScreenSaver`
 afterwards so macOS drops the cached bundle.
+
+The bundles in `dist/` are committed build products, refreshed with:
+
+```bash
+./build.sh && rm -rf dist && mkdir dist && \
+  for d in build/*.saver; do \
+    ditto -c -k --sequesterRsrc --keepParent "$d" "dist/$(basename "$d").zip"; \
+  done
+```
+
+`ditto` rather than `zip`: it keeps the bundle structure and the ad-hoc
+signature intact through the round trip.
 
 Builds universal (x86_64 + arm64) against the macOS 15 SDK.
 
