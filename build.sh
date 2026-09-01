@@ -46,6 +46,15 @@ saver() {
   lipo -create "${slices[@]}" -output "${out}/Contents/MacOS/${exec}"
   cp "${plist}" "${out}/Contents/Info.plist"
 
+  # System Settings shows CFBundleName, not the filename. These drifted apart
+  # once already and shipped, because a rename touched only the filename.
+  local declared
+  declared=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "${out}/Contents/Info.plist")
+  if [ "${declared}" != "${name}" ]; then
+    echo "ERROR: ${plist} declares CFBundleName '${declared}' but the bundle is '${name}'" >&2
+    exit 1
+  fi
+
   # Ad-hoc sign so macOS will load it without complaint.
   codesign --force --deep --sign - "${out}" >/dev/null 2>&1 || \
     echo "note: ad-hoc codesign skipped for ${name}"
