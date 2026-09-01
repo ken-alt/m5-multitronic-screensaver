@@ -657,7 +657,11 @@ enum CounterChrome {
         let scale = pixelScale(ctx)
         let key = "\(Int(size.width.rounded()))x\(Int(size.height.rounded()))"
             + "-\(Int(screwInset.rounded()))-\(centreScrews)@\(scale)"
-        let dest = plate.insetBy(dx: -pad, dy: -pad)
+        // The destination must match the cached image's own size exactly, on a
+        // whole-point origin. Off by any fraction and CoreGraphics resamples
+        // the entire plate every frame rather than copying it.
+        let dest = CGRect(x: (plate.minX - pad).rounded(), y: (plate.minY - pad).rounded(),
+                          width: size.width.rounded(), height: size.height.rounded())
         if let img = plateCache[key] {
             ctx.draw(img, in: dest)
             return

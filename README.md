@@ -32,7 +32,7 @@ The M-5 computer readout field on its own.
 
 The field with the clock module, built as the original prop: ink on pale wheels behind a white mask, with a light switch.
 
-**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 172 KB
+**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 187 KB
 
 ### M-5 Multitronic with Clock - Remaster
 
@@ -40,7 +40,7 @@ The field with the clock module, built as the original prop: ink on pale wheels 
 
 The field with the clock module as the remastered episode shows it: amber numerals lit from within, on black.
 
-**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 160 KB
+**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 175 KB
 
 ### TOS Chronometer - Classic
 
@@ -48,7 +48,7 @@ The field with the clock module as the remastered episode shows it: amber numera
 
 Stardate and ship's time, original prop.
 
-**[Download TOS Chronometer - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Classic.saver.zip)** · 125 KB
+**[Download TOS Chronometer - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Classic.saver.zip)** · 134 KB
 
 ### TOS Chronometer - Remaster
 
@@ -56,7 +56,7 @@ Stardate and ship's time, original prop.
 
 Stardate and ship's time, remastered finish.
 
-**[Download TOS Chronometer - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Remaster.saver.zip)** · 112 KB
+**[Download TOS Chronometer - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Remaster.saver.zip)** · 122 KB
 
 ## Two eras of the same prop
 
@@ -178,65 +178,85 @@ guard, that second figure runs forever.
 
 Measured at 2560×1600 on a 1.4 GHz Core i5-8257U, against a 16.67 ms budget.
 
-The single biggest cost by a wide margin is a **full-screen radial gradient**.
-One as a vignette measured ~72 ms/frame alone. Later the gloss backdrop and the
-cover glass reintroduced three of them between them, and the clock saver ran at
-**341 ms/frame**. Both layers are fixed for a given size, so they are rendered
-once and blitted, taking that saver to ~22 ms. If something is suddenly slow,
-look for a gradient covering the whole screen before anything else.
+| Saver | before | after |
+|---|---|---|
+| M-5 Multitronic | 9.35 | **5.30** |
+| Clock — Classic | 18.56 | **9.92** |
+| Clock — Remaster | 17.43 | **11.75** |
+| Chronometer — Classic | 51.91 | **3.68** |
+| Chronometer — Remaster | 44.48 | **5.46** |
 
-### What caching does and does not fix
+Three things account for nearly all of it.
 
-Caching pays when it replaces per-pixel *computation* with an **opaque copy**.
-The backdrop and cover glass are the case in point: full-screen radial
-gradients became a straight blit, and a saver went from 341 ms to 22 ms.
+### A cached blit must match its destination exactly
 
-Caching does not pay when the result still has to be **alpha-composited** over
-the same area. Compositing a large translucent image costs about what
-generating it did, because both are fill-rate bound and neither is a memcpy.
-This was measured three separate ways — via `CGLayer`, per-window bezels, and
-finally the whole static window furniture as `CGImage` — and every one landed
-inside noise or under 8%.
+This one was worth 19 ms a frame on its own, and it hid behind a wrong
+conclusion for a long time.
 
-That is the ceiling, not a missing optimisation. Screen-clean figures at
-2560×1600, against a 16.67 ms budget:
+Cache an image, then draw it into a rect whose size differs from the image's
+pixel dimensions — even by a fraction of a point — and CoreGraphics resamples
+every pixel instead of copying it. The chronometer's panel is about 1.6M
+pixels; blitting it cost **19.8 ms**, against 0.87 ms for the numerals it
+framed. Rounding the plate and aperture rects to whole points took that same
+blit to **0.86 ms**. The front tier went from 4.5 ms to 0.17 ms the same way.
 
-| Saver | ms/frame |
-|---|---|
-| M-5 Multitronic | 6.5 |
-| Clock — Classic | 19.0 |
-| Clock — Remaster | 19.4 |
-| Chronometer — Classic | 60.2 |
-| Chronometer — Remaster | 59.9 |
+Whole-point geometry is therefore load-bearing here, not tidiness. The same bug
+lived in `drawUnitPlate`, whose destination was `plate.insetBy(-pad)` while its
+image was rounded to integers; fixing that one line took ~5 ms off both clock
+savers.
 
-Classic and Remaster cost the same within noise, which contradicts an
-assumption held for several rounds that the Classic's opaque mask made it the
-expensive one.
+An earlier version of this file concluded that compositing a large translucent
+image "costs about what generating it did" and called that the ceiling. That
+was wrong. It was measuring resampling, not compositing, and the ceiling was an
+artefact of the measurement.
 
-### Measure before you optimise
+### Full-screen radial gradients
 
-The chronometers were assumed to be slow because their apertures are ~6.3× the
-area of the clock module's. Removing every window — bezels, drum faces, digits
-and all the lighting passes — took a 59.7 ms frame only to 49.5 ms. The windows
-were never the problem.
+Still the most expensive single thing CoreGraphics does here. One vignette
+measured ~72 ms/frame alone; the gloss backdrop and cover glass together once
+put a saver at **341 ms/frame**. Both are fixed for a given size, so they are
+rendered once and blitted. If something is suddenly slow, look for a gradient
+covering the whole screen before anything else.
 
-The cost was one call: the unit plate's blurred drop shadow, **32 ms of 59**.
-CoreGraphics shadows scale with area times blur radius, and blur here is
-proportional to plate height, so the chronometer's 1843×590 plate costs roughly
-nine times the clock module's. The plate never changes — it only drifts — so it
-is now rendered once and blitted, taking the chronometers to ~44 ms.
+A bottom layer that covers the frame has nothing to blend with, so it is built
+**opaque** — `noneSkipFirst` rather than `premultipliedFirst`. That makes the
+blit a copy rather than a four-million-pixel composite, worth ~1.5 ms.
 
-Note the cached blit still costs ~17 ms of that: the image carries alpha for
-the shadow margin, so compositing it is fill-rate bound in the same way. Only
-opaque copies are genuinely cheap.
+### Build caches at device resolution
 
-Getting the chronometers inside budget means moving the compositing to the GPU
-— a `CAMetalLayer` returned from the view's backing layer, since a
-`ScreenSaverView` subclass cannot use `MTKView`. Rectangular clipping instead
-of rounded-path clipping was worth about 1.5 ms and is already in.
+Every cache here was originally built at *point* size, so on a Retina display
+it was upscaled and soft. Invisible on a smooth gradient, plainly wrong on
+etched text and screw heads. `CounterChrome.pixelScale` reads the scale off the
+context's own transform and `renderScaled` builds at that resolution, leaving
+the drawing inside expressed in points.
 
-Benchmarks are meaningless on a loaded machine. Check `uptime` first — a
-background encode moved these numbers by 7×.
+### Measure, don't guess
+
+Every time the cost of something here was assumed rather than measured, the
+assumption was wrong — and expensively so:
+
+- The chronometers were assumed slow because their apertures are ~6.3× the clock
+  module's area. Removing every window took a 59.7 ms frame only to 49.5 ms.
+- The cost turned out to be one call: the plate's blurred drop shadow, 32 ms of
+  59. CoreGraphics shadows scale with area × blur radius.
+- After caching, the digits — the only thing that actually changes — were 0.87 ms
+  of a 26.5 ms frame. The panel blit was 19.8.
+- A case was once built for moving to `CAMetalLayer` on the strength of a wrong
+  diagnosis, and withdrawn once the frame was decomposed properly.
+
+`M5_PROFILE=1` prints the chronometer's per-tier timings for exactly this
+reason. Benchmarks are also meaningless on a loaded machine — check `uptime`
+first; a background encode moved these numbers by 7×.
+
+### How the drawing is tiered
+
+`CounterWindow` splits into `drawBelow` (bezel and barrel), `drawDigits` (the
+reading) and `drawAbove` (lamp wash, mask, gloss, inner shadow). Only the
+middle changes between frames, and the burn-in wander is a *translation* of the
+whole panel rather than a redraw — so the chrome is rendered once in
+panel-local coordinates and blitted at the drifted origin. Every chrome routine
+brackets itself in `save`/`restoreGState`, which is what lets the tiers be drawn
+into separate contexts.
 
 ## A note on derived dimensions
 
