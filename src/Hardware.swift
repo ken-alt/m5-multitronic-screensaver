@@ -348,12 +348,16 @@ enum Hardware {
     private static var backdropCache: (w: Int, h: Int, img: CGImage)?
     private static var glassCache: (w: Int, h: Int, img: CGImage)?
 
-    private static func renderLayer(w: Int, h: Int,
+    /// `opaque` drops the alpha channel. A bottom layer that covers the frame
+    /// has nothing to blend with, and an opaque blit is a straight copy where
+    /// a premultiplied one is a per-pixel composite over four million pixels.
+    private static func renderLayer(w: Int, h: Int, opaque: Bool = false,
                                     _ body: (CGContext, CGRect) -> Void) -> CGImage? {
+        let alpha = opaque ? CGImageAlphaInfo.noneSkipFirst : .premultipliedFirst
         guard w > 0, h > 0,
               let c = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
                                 bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
+                                bitmapInfo: alpha.rawValue)
         else { return nil }
         body(c, CGRect(x: 0, y: 0, width: CGFloat(w), height: CGFloat(h)))
         return c.makeImage()
@@ -366,7 +370,7 @@ enum Hardware {
     static func drawCachedScreen(_ ctx: CGContext, in r: CGRect) {
         let w = Int(r.width.rounded()), h = Int(r.height.rounded())
         if backdropCache?.w != w || backdropCache?.h != h {
-            backdropCache = renderLayer(w: w, h: h) { c, rect in
+            backdropCache = renderLayer(w: w, h: h, opaque: true) { c, rect in
                 CounterChrome.drawScreen(c, in: rect)
             }.map { (w, h, $0) }
         }

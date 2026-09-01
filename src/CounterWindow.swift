@@ -175,18 +175,38 @@ final class CounterWindow {
     /// behind. Lamps sit just inside the top and bottom of the opening and
     /// wash across the drum, the way a speedometer is lit.
     func draw(_ ctx: CGContext, in win: CGRect) {
+        drawBelow(ctx, in: win)
+        drawDigits(ctx, in: win)
+        drawAbove(ctx, in: win)
+    }
+
+    /// The aperture and the barrel behind the reading. Fixed for a given
+    /// layout, so a caller that caches its chrome need only draw this once.
+    func drawBelow(_ ctx: CGContext, in win: CGRect) {
         CounterChrome.drawBezel(ctx, around: win, finish: finish)
         CounterChrome.drawDrumFace(ctx, in: win, finish: finish)
+    }
 
-        let lit = drawReading(ctx, in: win)
+    /// The reading. The only tier that changes from one frame to the next.
+    func drawDigits(_ ctx: CGContext, in win: CGRect) {
+        drawReading(ctx, in: win)
+    }
 
+    /// Everything in front of the reading. Fixed for a given layout like
+    /// `drawBelow`, with one ordering constraint: it reads `drumExtent` and
+    /// `lastDigitHeight`, which `drawDigits` computes, so let one reading draw
+    /// before caching this tier.
+    ///
+    /// Every routine here brackets itself in save/restoreGState, so the three
+    /// tiers may be drawn into separate contexts without one inheriting state
+    /// the next relies on.
+    func drawAbove(_ ctx: CGContext, in win: CGRect) {
         // Nothing lights the emissive readout — the numerals are the light
         // source — so the drum shading, the lamp wash and the mask all belong
         // to the Classic alone.
         if finish == .retro {
             CounterChrome.drawRetroShading(ctx, in: win)
         }
-        _ = lit
 
         // No seam across the middle. A split-flap has one; a rotating barrel
         // shows a continuous digit face, and the hard line read as the wrong
@@ -604,28 +624,52 @@ enum CounterChrome {
     /// once and blitted, with margin around it for the shadow to fall into.
     private static var plateCache: [String: CGImage] = [:]
 
+    /// Backing pixels per point, taken from the context's own transform. A
+    /// cache built at point size and blitted into a Retina context is upscaled
+    /// and soft — unnoticeable on a smooth gradient, plainly wrong on etched
+    /// text and screw heads.
+    static func pixelScale(_ ctx: CGContext) -> CGFloat {
+        let t = ctx.userSpaceToDeviceSpaceTransform
+        let s = (t.a * t.a + t.b * t.b).squareRoot()
+        return s.isFinite && s > 0 ? s : 1
+    }
+
+    /// Renders `body` offscreen at device resolution, leaving the drawing
+    /// inside it expressed in points.
+    static func renderScaled(_ size: CGSize, scale: CGFloat,
+                             _ body: (CGContext) -> Void) -> CGImage? {
+        let pw = Int((size.width * scale).rounded())
+        let ph = Int((size.height * scale).rounded())
+        guard pw > 0, ph > 0,
+              let c = CGContext(data: nil, width: pw, height: ph, bitsPerComponent: 8,
+                                bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)
+        else { return nil }
+        c.scaleBy(x: scale, y: scale)
+        body(c)
+        return c.makeImage()
+    }
+
     static func drawUnitPlate(_ ctx: CGContext, _ plate: CGRect, screwInset: CGFloat,
                               centreScrews: Bool = true) {
         let pad = (plate.height * 0.12).rounded()
-        let w = Int((plate.width + pad * 2).rounded())
-        let h = Int((plate.height + pad * 2).rounded())
-        let key = "\(w)x\(h)-\(Int(screwInset.rounded()))-\(centreScrews)"
+        let size = CGSize(width: plate.width + pad * 2, height: plate.height + pad * 2)
+        let scale = pixelScale(ctx)
+        let key = "\(Int(size.width.rounded()))x\(Int(size.height.rounded()))"
+            + "-\(Int(screwInset.rounded()))-\(centreScrews)@\(scale)"
+        let dest = plate.insetBy(dx: -pad, dy: -pad)
         if let img = plateCache[key] {
-            ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
+            ctx.draw(img, in: dest)
             return
         }
-        if w > 0, h > 0,
-           let lc = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
-                              bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
-                              bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) {
-            let local = CGRect(x: pad, y: pad, width: plate.width, height: plate.height)
+        let local = CGRect(x: pad, y: pad, width: plate.width, height: plate.height)
+        if let img = renderScaled(size, scale: scale, { lc in
             drawUnitPlateDirect(lc, local, screwInset: screwInset,
                                 centreScrews: centreScrews)
-            if let img = lc.makeImage() {
-                plateCache[key] = img
-                ctx.draw(img, in: plate.insetBy(dx: -pad, dy: -pad))
-                return
-            }
+        }) {
+            plateCache[key] = img
+            ctx.draw(img, in: dest)
+            return
         }
         drawUnitPlateDirect(ctx, plate, screwInset: screwInset,
                             centreScrews: centreScrews)

@@ -160,101 +160,218 @@ public class ChronometerView: ScreenSaverView {
         setNeedsDisplay(bounds)
     }
 
-    // MARK: Drawing
+    // MARK: Cached chrome
+    //
+    // The panel is fixed for a given screen size: plate, lamps, aperture
+    // frames, captions and switch never change. Only the readings do — and
+    // the burn-in wander is a translation of the whole panel, not a redraw.
+    // So the chrome is rendered once in panel-local coordinates and blitted
+    // at the drifted origin.
 
-    public override func draw(_ rect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+    // Which tier costs what. Guessing has been wrong every time it mattered
+    // here, so the decomposition is measurable rather than assumed.
+    private static let profiling = ProcessInfo.processInfo.environment["M5_PROFILE"] != nil
+    private var phase = [Double](repeating: 0, count: 4)
+    private var phaseFrames = 0
 
-        Hardware.drawCachedScreen(ctx, in: bounds)
+    private var chromeKey = ""
+    private var chromePad: CGFloat = 0
+    private var chromeSize: CGSize = .zero
+    private var panelImage: CGImage?
+    private var aboveImages: [CGImage?] = []
 
-        // Slow wander, so a panel left up for hours is not a burn-in risk.
-        // Two incommensurate periods, so it never repeats exactly.
-        let amp = min(bounds.width, bounds.height) * ChronometerView.driftAmp
-        let dx = CGFloat(sin(drift / 97.0 * 2 * .pi)) * amp
-        let dy = CGFloat(sin(drift / 131.0 * 2 * .pi)) * amp * 0.6
+    private struct Layout {
+        var plate: CGRect
+        var windows: [CGRect]
+        var winH: CGFloat
+        var lampR: CGFloat
+        var lampY: CGFloat
+        var labelSize: CGFloat
+    }
 
+    /// Panel geometry with the wander left out, so it stays stable for a given
+    /// size and the chrome it describes can be cached.
+    private func layout(for size: CGSize) -> Layout {
         // Size the apertures from the space actually available, then let the
         // plate follow. Deriving the windows from the plate instead made the
         // pair plus its gap 1.125x the plate width, so they hung off both ends.
-        let plateW = min(bounds.width * 0.76, bounds.height * 2.3)
+        let plateW = min(size.width * 0.76, size.height * 2.3)
         let unit = CGRect(x: 0, y: 0, width: 1, height: 1)
         let gapPerHeight = CounterChrome.bezelSideWidth(forAperture: unit) * 2 + 0.30
-        let winHeight = (plateW * 0.88) / (2 * ChronometerView.windowAspect + gapPerHeight)
-        let plateH = winHeight / 0.27
-        let p = CGRect(x: bounds.midX - plateW / 2 + dx,
-                       y: bounds.midY - plateH / 2 + dy,
-                       width: plateW, height: plateH)
+        let winH = (plateW * 0.88) / (2 * ChronometerView.windowAspect + gapPerHeight)
+        let plateH = winH / 0.27
+        let p = CGRect(x: 0, y: 0, width: plateW.rounded(), height: plateH.rounded())
 
-        // No centre screws: the switch and its legend occupy that column.
-        CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.035,
-                                    centreScrews: false)
-
-        let winH = winHeight
         let winY = p.maxY - p.height * 0.60
         let eachW = winH * ChronometerView.windowAspect
         let sideW = CounterChrome.bezelSideWidth(
             forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
         let gap = sideW * 2 + winH * 0.30
 
-        let texts = [Stardate.string(Date()), ShipboardClock.string24(Date())]
-        let windows = [stardate, shipboard]
-        let captions = ["STARDATE", "SHIPBOARD"]
+        // Whole points throughout. These rects size the cached chrome images,
+        // and a blit whose destination differs from the source by a fraction
+        // of a pixel resamples the whole image instead of copying it — which
+        // cost 19 ms a frame on the panel alone.
+        var wins: [CGRect] = []
+        var x = p.midX - (eachW * 2 + gap) / 2
+        for _ in 0 ..< 2 {
+            wins.append(CGRect(x: x.rounded(), y: winY.rounded(),
+                               width: eachW.rounded(), height: winH.rounded()))
+            x += eachW + gap
+        }
+        return Layout(plate: p, windows: wins, winH: winH,
+                      lampR: p.height * 0.036,
+                      lampY: p.maxY - p.height * 0.155,
+                      labelSize: p.height * 0.072)
+    }
 
-        // One pitch and one glyph height across both, so the readouts match.
+    /// One pitch and one glyph height across both readouts, so they read as
+    /// one instrument rather than two separately-scaled boxes.
+    private func applyMetrics(_ l: Layout) {
+        let texts = [Stardate.string(Date()), ShipboardClock.string24(Date())]
         let widestUnits = texts.reduce(CGFloat(0)) { max($0, CounterWindow.units(for: $1)) }
-        let pitch = max(1, (eachW - 2 * winH * CounterWindow.padFraction) / widestUnits)
+        let pitch = max(1, (l.windows[0].width
+                            - 2 * l.winH * CounterWindow.padFraction) / widestUnits)
         var widestRatio: CGFloat = 0
-        for w in windows {
+        for w in [stardate, shipboard] {
             w.fixedPitch = pitch
             widestRatio = max(widestRatio, w.widestGlyphRatio())
         }
         let digitH = widestRatio > 0
-            ? min(winH * 0.60, pitch * CounterWindow.glyphFit / widestRatio)
-            : winH * 0.60
-        for w in windows { w.fixedDigitHeight = digitH }
+            ? min(l.winH * 0.60, pitch * CounterWindow.glyphFit / widestRatio)
+            : l.winH * 0.60
+        for w in [stardate, shipboard] { w.fixedDigitHeight = digitH }
+    }
 
-        let lampR = p.height * 0.036
-        let lampY = p.maxY - p.height * 0.155
-        let labelSize = p.height * 0.072
+    /// Everything behind the readings, in panel-local coordinates.
+    private func buildChrome(_ l: Layout, scale: CGFloat) {
+        let pad = (l.plate.height * 0.12).rounded()
+        chromePad = pad
+        let size = CGSize(width: (l.plate.width + pad * 2).rounded(),
+                          height: (l.plate.height + pad * 2).rounded())
+        chromeSize = size
+        let windows = [stardate, shipboard]
+        let captions = ["STARDATE", "SHIPBOARD"]
 
-        let groupW = eachW * 2 + gap
-        var x = p.midX - groupW / 2
-        for (i, w) in windows.enumerated() {
-            let r = CGRect(x: x, y: winY, width: eachW, height: winH)
-            // The prop's indicator lamps read orange-red; the clock-only saver
-            // uses a true red.
-            CounterChrome.drawLED(ctx, at: CGPoint(x: r.midX, y: lampY), radius: lampR,
-                                  red: 0.94, green: 0.28, blue: 0.06)
-            w.draw(ctx, in: r)
-            // Clear of the bezel's lower edge, not just of the aperture — the
-            // frame stands proud below the opening.
-            let capY = winY - CounterChrome.bezelWidth(
-                forAperture: CGRect(x: 0, y: 0, width: 1, height: winH)) - labelSize * 0.85
-            CounterChrome.drawEtchedLabel(ctx, captions[i],
-                                          centeredAt: CGPoint(x: r.midX, y: capY),
-                                          size: labelSize)
-            x += eachW + gap
+        panelImage = CounterChrome.renderScaled(size, scale: scale) { c in
+            c.translateBy(x: pad, y: pad)
+
+            // No centre screws: the switch and its legend occupy that column.
+            CounterChrome.drawUnitPlate(c, l.plate, screwInset: l.plate.width * 0.035,
+                                        centreScrews: false)
+
+            for (i, win) in l.windows.enumerated() {
+                // The prop's indicator lamps read orange-red; the clock-only
+                // saver uses a true red.
+                CounterChrome.drawLED(c, at: CGPoint(x: win.midX, y: l.lampY),
+                                      radius: l.lampR,
+                                      red: 0.94, green: 0.28, blue: 0.06)
+                windows[i].drawBelow(c, in: win)
+                // Clear of the bezel's lower edge, not just of the aperture —
+                // the frame stands proud below the opening.
+                let capY = win.minY - CounterChrome.bezelWidth(
+                    forAperture: CGRect(x: 0, y: 0, width: 1, height: l.winH))
+                    - l.labelSize * 0.85
+                CounterChrome.drawEtchedLabel(c, captions[i],
+                                              centeredAt: CGPoint(x: win.midX, y: capY),
+                                              size: l.labelSize)
+            }
+
+            // Light switch on the bottom row, as on the prop, centred between
+            // the two captions. A static fitting, like the screws.
+            if self.showsLightSwitch {
+                let togS = l.plate.height * 0.112
+                let capSize = l.plate.height * 0.038
+                let capClear = togS * 0.45
+                let togX = l.plate.midX
+                // Clear of the lit bottom edge of the recess, which reaches
+                // about 0.033 of the plate height up from the base.
+                let rowY = l.plate.minY + l.plate.height * 0.185
+                Hardware.drawToggle(c, at: CGPoint(x: togX, y: rowY), scale: togS)
+                CounterChrome.drawLegend(c, ["LIGHT", "SWITCH"],
+                                         leftAt: CGPoint(x: togX + togS / 2 + capClear,
+                                                         y: rowY),
+                                         size: capSize, etched: true)
+            }
         }
 
-        // Light switch on the bottom row, as on the prop, centred between the
-        // two captions. A static fitting, like the screws.
-        if showsLightSwitch {
-            let togS = p.height * 0.112
-            let capSize = p.height * 0.038
-            let capW = max(CounterChrome.labelWidth("LIGHT", size: capSize),
-                           CounterChrome.labelWidth("SWITCH", size: capSize))
-            // The switch itself sits on the centre line, as on the prop, with
-            // the legend running off to its right.
-            let capClear = togS * 0.45
-            _ = capW
-            let togX = p.midX
-            // Clear of the lit bottom edge of the recess, which reaches about
-            // 0.033 of the plate height up from the base.
-            let rowY = p.minY + p.height * 0.185
-            Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
-            CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
-                                     leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowY),
-                                     size: capSize, etched: true)
+        // drawAbove reads the drum extent a reading establishes, so let one
+        // digit pass run — discarded into a scratch context — before the front
+        // tier is cached.
+        _ = CounterChrome.renderScaled(CGSize(width: 1, height: 1), scale: 1) { c in
+            for (i, win) in l.windows.enumerated() { windows[i].drawDigits(c, in: win) }
+        }
+
+        // The front tier is confined to the aperture, so it caches at aperture
+        // size rather than over the whole panel.
+        aboveImages = l.windows.enumerated().map { i, win in
+            CounterChrome.renderScaled(win.size, scale: scale) { c in
+                c.translateBy(x: -win.minX, y: -win.minY)
+                windows[i].drawAbove(c, in: win)
+            }
+        }
+    }
+
+    // MARK: Drawing
+
+    public override func draw(_ rect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+
+        let tStart = CFAbsoluteTimeGetCurrent()
+        Hardware.drawCachedScreen(ctx, in: bounds)
+
+        let l = layout(for: bounds.size)
+        applyMetrics(l)
+
+        let scale = CounterChrome.pixelScale(ctx)
+        let key = "\(Int(bounds.width))x\(Int(bounds.height))@\(scale)-\(showsLightSwitch)"
+        if key != chromeKey || panelImage == nil {
+            buildChrome(l, scale: scale)
+            chromeKey = key
+        }
+
+        // Slow wander, so a panel left up for hours is not a burn-in risk.
+        // Two incommensurate periods, so it never repeats exactly. Rounded to
+        // whole points: the panel is a cached image, and blitting it on a
+        // fraction resamples every pixel of it every frame.
+        let amp = min(bounds.width, bounds.height) * ChronometerView.driftAmp
+        let dx = (CGFloat(sin(drift / 97.0 * 2 * .pi)) * amp).rounded()
+        let dy = (CGFloat(sin(drift / 131.0 * 2 * .pi)) * amp * 0.6).rounded()
+        let ox = (bounds.midX - l.plate.width / 2).rounded() + dx
+        let oy = (bounds.midY - l.plate.height / 2).rounded() + dy
+
+        let tPanel = CFAbsoluteTimeGetCurrent()
+        if let img = panelImage {
+            ctx.draw(img, in: CGRect(x: ox - chromePad, y: oy - chromePad,
+                                     width: chromeSize.width, height: chromeSize.height))
+        }
+
+        let tDigits = CFAbsoluteTimeGetCurrent()
+        ctx.saveGState()
+        ctx.translateBy(x: ox, y: oy)
+        let windows = [stardate, shipboard]
+        for (i, win) in l.windows.enumerated() { windows[i].drawDigits(ctx, in: win) }
+        let tAbove = CFAbsoluteTimeGetCurrent()
+        for (i, win) in l.windows.enumerated() {
+            if i < aboveImages.count, let a = aboveImages[i] { ctx.draw(a, in: win) }
+        }
+        ctx.restoreGState()
+
+        if ChronometerView.profiling {
+            let end = CFAbsoluteTimeGetCurrent()
+            phase[0] += tPanel - tStart
+            phase[1] += tDigits - tPanel
+            phase[2] += tAbove - tDigits
+            phase[3] += end - tAbove
+            phaseFrames += 1
+            if phaseFrames == 100 {
+                let n = Double(phaseFrames)
+                FileHandle.standardError.write(String(
+                    format: "backdrop %.2f  panel %.2f  digits %.2f  above %.2f  (ms/frame)\n",
+                    phase[0] / n * 1000, phase[1] / n * 1000,
+                    phase[2] / n * 1000, phase[3] / n * 1000).data(using: .utf8)!)
+                phase = [0, 0, 0, 0]; phaseFrames = 0
+            }
         }
     }
 }
