@@ -248,7 +248,9 @@ public class ChronometerView: ScreenSaverView {
             let capClear = togS * 0.45
             _ = capW
             let togX = p.midX
-            let rowY = p.minY + p.height * 0.155
+            // Clear of the lit bottom edge of the recess, which reaches about
+            // 0.033 of the plate height up from the base.
+            let rowY = p.minY + p.height * 0.185
             Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
             CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
                                      leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowY),

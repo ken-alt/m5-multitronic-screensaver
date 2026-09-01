@@ -687,12 +687,14 @@ enum CounterChrome {
                                    end: CGPoint(x: plate.maxX - deep * 0.55, y: plate.minY),
                                    options: [])
         }
-        if let g = grad([(0, white(0.13)), (1, white(0))]) {
+        // Kept shallow: a deeper catch along the bottom edge reaches far enough
+        // up the plate to interfere with anything mounted low on it.
+        if let g = grad([(0, white(0.095)), (1, white(0))]) {
             ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
-                                   end: CGPoint(x: plate.minX, y: plate.minY + deep * 0.42),
+                                   end: CGPoint(x: plate.minX, y: plate.minY + deep * 0.30),
                                    options: [])
             ctx.drawLinearGradient(g, start: CGPoint(x: plate.minX, y: plate.minY),
-                                   end: CGPoint(x: plate.minX + deep * 0.40, y: plate.minY),
+                                   end: CGPoint(x: plate.minX + deep * 0.32, y: plate.minY),
                                    options: [])
         }
         ctx.restoreGState()
