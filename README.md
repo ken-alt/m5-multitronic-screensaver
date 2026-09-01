@@ -18,6 +18,15 @@ Each is a ready-built universal bundle. Unzip, double-click to install (or drop
 into `~/Library/Screen Savers/`), then pick it in System Settings → Screen
 Saver, under Other.
 
+> **macOS will say it "cannot be verified".** Expected — these are not
+> notarised. Run this once and it goes away:
+>
+> ```bash
+> xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/*.saver
+> ```
+>
+> [Why, and what it does](#macos-cannot-verify-this-screensaver).
+
 ### M-5 Multitronic
 
 ![](docs/m5-multitronic.png)
