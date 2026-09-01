@@ -25,7 +25,8 @@ Saver, under Other.
 > xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/*.saver
 > ```
 >
-> [Why, and what it does](#macos-cannot-verify-this-screensaver).
+> There is a way to do it without Terminal too, in System Settings. See
+> [why this happens, and both ways to clear it](#macos-cannot-verify-this-screensaver).
 
 ### M-5 Multitronic
 
@@ -234,15 +235,36 @@ they were built, but it carries no Apple Developer identity, so Gatekeeper has
 no one to attribute them to. Your browser also tags anything downloaded with a
 quarantine flag, and that flag is what raises the dialog.
 
-Clear it and the saver runs normally:
+There are two ways to clear it. Either is fine — they tell macOS the same
+thing.
+
+### With Terminal
+
+One command, and it covers every saver you have installed at once:
 
 ```bash
 xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/*.saver
 ```
 
-The bundle is unchanged by this — `codesign --verify --deep --strict` still
-passes afterwards. You are telling macOS you trust the source, not disabling a
-check on the file's integrity.
+### Without Terminal
+
+macOS offers an override in Settings, but only for something it has *already*
+blocked — so the order matters:
+
+1. Double-click the saver and let the "cannot be verified" dialog appear.
+   Dismiss it. That attempt is what registers the block.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll down to **Security**. A line names the screensaver that was just
+   blocked, with a button to allow it anyway.
+4. Click it and authenticate with Touch ID or your password.
+
+The entry appears only after a blocked attempt and refers to one item, so
+repeat it for each saver you install. If you install several, the Terminal
+command above is much less tedious.
+
+Either way the bundle is unchanged — `codesign --verify --deep --strict` still
+passes afterwards. You are telling macOS you trust where it came from, not
+disabling a check on the file's integrity.
 
 Making the dialog go away properly means a Developer ID certificate and
 notarisation, which needs a paid Apple Developer Program membership. For a free
