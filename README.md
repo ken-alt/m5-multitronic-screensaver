@@ -58,27 +58,6 @@ Stardate and ship's time, remastered finish.
 
 **[Download TOS Chronometer - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Remaster.saver.zip)** · 122 KB
 
-## Options
-
-Both clock savers carry a configure sheet — the **Options…** button beside the
-saver in System Settings → Screen Saver.
-
-| | |
-|---|---|
-| **Time format** | 12-hour (default) or 24-hour |
-
-A 24-hour reading has no meridiem, so that window is not merely blanked — it is
-removed, and the plate narrows by exactly the window and gap that went away so
-the two remaining readouts keep the margins they had. Nothing else about the
-12-hour layout changes.
-
-`hasConfigureSheet` and `configureSheet` are both present and undeprecated in
-the macOS 26 SDK, and the redesigned System Settings pane still calls them, so
-this needs no private API. The setting is stored through `ScreenSaverDefaults`,
-which is keyed by bundle identifier — each variant therefore keeps its own.
-
-The chronometers deliberately have no such option: the prop shows ship's time
-in 24 hours with no meridiem window, and that is what they reproduce.
 
 ## Two eras of the same prop
 
@@ -98,8 +77,10 @@ foreshortening is what reads as rotation rather than a card sliding past.
 **Remaster** is an emissive display — amber numerals lit from within, on black.
 There is no wheel, so there are no division lines and nothing for a lamp to
 fall on; the cell spacing is kept only so the two eras read at the same size.
-Digits translate rather than rotate, and the clock module drops the light
-switch entirely, since there is no lamp to switch.
+A digit does not travel at all: the old numeral fades out as the new one
+comes up in its place, drawn additively, because that is what a lit display
+does. An earlier version slid them through the aperture, which still read as
+a drum turning past a window — the one mechanism this era does not have.
 
 ![](docs/chronometer-remaster.png)
 
@@ -109,18 +90,20 @@ darkens towards the bottom, and the shading multiplies over the numerals
 because they are printed on it rather than glowing through it. The Remaster is
 its own light source, so nothing shades it.
 
+
 ## The clock module
 
 A black anodised aluminium insert sunk into the gloss display, with `HRS`,
 `MIN` and `SEC` engraved and ink-filled. Three drums — hours and minutes,
 seconds, meridiem — sharing one digit pitch and one glyph height so the
-sections cannot disagree on size. Every character rides its own wheel, and the
+sections cannot disagree on size, or two when set to 24-hour time. Every character rides its own wheel, and the
 wheels are the same width, so the punctuation gets a full cell.
 
 | | |
 |---|---|
 | ![](docs/clock-classic.png) | ![](docs/clock-remaster.png) |
 | Classic | Remaster |
+
 
 ## Stardate
 
@@ -153,6 +136,7 @@ It never sets the readout's width, incidentally — the shipboard reading is
 eight characters against the stardate's six, so the shared digit pitch is
 always driven by the clock beside it.
 
+
 ## References
 
 The proportions, palette and lighting here were measured off two sources
@@ -161,7 +145,9 @@ their rights holders — so they are cited instead:
 
 - **The original prop**, a countdown panel: two windows of dark numerals on
   pale drums, red indicator lamps captioned `HRS`/`MIN` and `SEC`, and two bat
-  toggles labelled *light switch* and *clock switch* below.
+  toggles labelled *light switch* and *clock switch* below. One switch is kept,
+  centred, on the chronometer panel; the clock module goes without, having no
+  room for it beside three readouts.
 - **The remastered chronometer**, seen at about 0:46 of
   [this clip](https://www.youtube.com/watch?v=wGB9gjRnv00): amber numerals on
   gloss black behind chrome bezels, captioned `STARDATE` and `SHIPBOARD`.
@@ -174,6 +160,30 @@ teal — 1960s Technicolor pushes the greens yellow and the reds orange); the
 window proportions and the frame being wider at the sides than top and bottom;
 the lamp placement inline with the captions rather than one per window; and the
 fact that the numerals carry a visible vertical falloff from the lamps.
+
+
+## Options
+
+Both clock savers carry a configure sheet — the **Options…** button beside the
+saver in System Settings → Screen Saver.
+
+| | |
+|---|---|
+| **Time format** | 12-hour (default) or 24-hour |
+
+A 24-hour reading has no meridiem, so that window is not merely blanked — it is
+removed, and the plate narrows by exactly the window and gap that went away so
+the two remaining readouts keep the margins they had. Nothing else about the
+12-hour layout changes.
+
+`hasConfigureSheet` and `configureSheet` are both present and undeprecated in
+the macOS 26 SDK, and the redesigned System Settings pane still calls them, so
+this needs no private API. The setting is stored through `ScreenSaverDefaults`,
+which is keyed by bundle identifier — each variant therefore keeps its own.
+
+The chronometers deliberately have no such option: the prop shows ship's time
+in 24 hours with no meridiem window, and that is what they reproduce.
+
 
 ## Install
 
@@ -206,6 +216,7 @@ default screensaver thumbnail — confirmed by Apple DTS on the
 [developer forums](https://developer.apple.com/forums/thread/806641) — and on
 macOS 26 custom thumbnails do not display at all.
 
+
 ## Fonts
 
 `DigitFacePreference` resolves DIN Condensed Bold → SF Condensed Bold → the
@@ -215,6 +226,7 @@ with macOS, so nothing needs installing and no font is bundled.
 **Never request SF by PostScript name.** CoreText silently substitutes Times
 New Roman for `.SFNS-Bold` and only logs a note about it. Use
 `NSFont.systemFont` with a descriptor width trait.
+
 
 ## The framework does not stop your saver
 
@@ -226,6 +238,7 @@ state through `startAnimation` / `stopAnimation` and `viewDidMoveToWindow`.
 Measured on the animation callback: 17.8 µs running against 0.09 µs dismissed
 on the bar field, and 140.7 µs against 0.17 µs on the retro clock. Without the
 guard, that second figure runs forever.
+
 
 ## What actually costs time
 
@@ -311,6 +324,7 @@ panel-local coordinates and blitted at the drifted origin. Every chrome routine
 brackets itself in `save`/`restoreGState`, which is what lets the tiers be drawn
 into separate contexts.
 
+
 ## A note on derived dimensions
 
 Nearly every visual defect in this project has had the same cause: a dimension
@@ -323,6 +337,7 @@ They are consolidated now: `bezelWidth` and `bezelSideWidth`, `apertureRadius`,
 `labelWidth` for measuring text, mask opening from the drawn glyph height, roll
 travel from aperture height. If something looks wrong, look first for two values
 that must match but are stated independently.
+
 
 ## Licence
 
