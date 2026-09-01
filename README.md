@@ -195,38 +195,6 @@ The chronometers deliberately have no such option: the prop shows ship's time
 in 24 hours with no meridiem window, and that is what they reproduce.
 
 
-## Install
-
-Requires Xcode for the current SDK.
-
-```bash
-./build.sh && cp -R build/*.saver ~/"Library/Screen Savers/"
-```
-
-Then pick one in System Settings → Screen Saver, under Other. Run the same line
-again to reinstall; if a saver is already selected, `killall legacyScreenSaver`
-afterwards so macOS drops the cached bundle.
-
-The bundles in `dist/` are committed build products, refreshed with:
-
-```bash
-./build.sh && rm -rf dist && mkdir dist && \
-  for d in build/*.saver; do \
-    ditto -c -k --sequesterRsrc --keepParent "$d" "dist/$(basename "$d").zip"; \
-  done
-```
-
-`ditto` rather than `zip`: it keeps the bundle structure and the ad-hoc
-signature intact through the round trip.
-
-Builds universal (x86_64 + arm64) against the macOS 15 SDK.
-
-**Thumbnails are not possible.** Apple provides no supported way to replace the
-default screensaver thumbnail — confirmed by Apple DTS on the
-[developer forums](https://developer.apple.com/forums/thread/806641) — and on
-macOS 26 custom thumbnails do not display at all.
-
-
 ## "macOS cannot verify this screensaver"
 
 Expected, and not a sign anything is wrong with the download. These bundles are
@@ -270,7 +238,25 @@ Making the dialog go away properly means a Developer ID certificate and
 notarisation, which needs a paid Apple Developer Program membership. For a free
 MIT screensaver that is a real cost for a dialog you see once, so it is not done
 here. Anyone who would rather not trust a stranger's binary can build from
-source instead — see **Install** above; it needs only Xcode.
+source instead — see **Build from source** below; it needs only Xcode.
+
+
+## Build from source
+
+Requires Xcode for the current SDK.
+
+```bash
+./build.sh && cp -R build/*.saver ~/"Library/Screen Savers/"
+```
+
+Then pick one in System Settings → Screen Saver, under Other. Run the same line
+again to reinstall; if a saver is already selected, `killall legacyScreenSaver`
+afterwards so macOS drops the cached bundle.
+
+Builds universal (x86_64 + arm64). The bundles in `dist/` are the same thing,
+built this way and zipped with `ditto`, which preserves the bundle structure and
+the ad-hoc signature that plain `zip` does not.
+
 
 ## Fonts
 
