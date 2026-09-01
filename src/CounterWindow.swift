@@ -1158,36 +1158,50 @@ enum CounterChrome {
     }
 
     /// Left-justified caption, one line per element, as panel legends are set.
+    /// Engraved the same way as `drawEtchedLabel` when asked: shading clipped
+    /// inside the letterforms, not dropped behind them.
     static func drawLegend(_ ctx: CGContext, _ lines: [String],
                            leftAt p: CGPoint, size: CGFloat, etched: Bool = false) {
         let font = NSFont(name: "Helvetica", size: size) ?? .systemFont(ofSize: size)
         let kern = size * 0.16
         let lead = size * 1.32
         let top = p.y + lead * CGFloat(lines.count - 1) / 2
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         for (i, line) in lines.enumerated() {
-            if etched {
-                for (dx, dy, w, a) in [(-size * 0.045, size * 0.045, CGFloat(0.0), CGFloat(0.75)),
-                                       (size * 0.05, -size * 0.05, CGFloat(0.72), CGFloat(0.35))] {
-                    let cut = NSAttributedString(string: line, attributes: [
-                        .font: font,
-                        .foregroundColor: NSColor(white: w, alpha: a),
-                        .kern: kern,
-                    ])
-                    cut.draw(at: NSPoint(x: p.x + dx,
-                                         y: top - lead * CGFloat(i) - cut.size().height / 2 + dy))
-                }
+            let y = top - lead * CGFloat(i)
+            guard etched else {
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+                let a = NSAttributedString(string: line, attributes: [
+                    .font: font,
+                    .foregroundColor: NSColor(cgColor: CounterStyle.label) ?? .white,
+                    .kern: kern,
+                ])
+                a.draw(at: NSPoint(x: p.x, y: y - a.size().height / 2))
+                NSGraphicsContext.restoreGraphicsState()
+                continue
             }
-            let a = NSAttributedString(string: line, attributes: [
-                .font: font,
-                .foregroundColor: etched ? NSColor(white: 0.80, alpha: 0.96)
-                                         : (NSColor(cgColor: CounterStyle.label) ?? .white),
-                .kern: kern,
-            ])
-            a.draw(at: NSPoint(x: p.x, y: top - lead * CGFloat(i) - a.size().height / 2))
+            let glyphs = textPath(line, font: font, kern: kern)
+            let b = glyphs.boundingBox
+            guard b.width > 0 else { continue }
+            var t = CGAffineTransform(translationX: p.x - b.minX, y: y - b.midY)
+            guard let path = glyphs.copy(using: &t) else { continue }
+            let d = size * 0.055
+            ctx.saveGState()
+            ctx.addPath(path)
+            ctx.setFillColor(CGColor(red: 0.80, green: 0.80, blue: 0.79, alpha: 0.96))
+            ctx.fillPath()
+            ctx.addPath(path)
+            ctx.clip()
+            var s1 = CGAffineTransform(translationX: lightX * d, y: lightY * d)
+            if let p1 = path.copy(using: &s1) {
+                ctx.setFillColor(black(0.55)); ctx.addPath(p1); ctx.fillPath(using: .evenOdd)
+            }
+            var s2 = CGAffineTransform(translationX: -lightX * d, y: -lightY * d)
+            if let p2 = path.copy(using: &s2) {
+                ctx.setFillColor(white(0.34)); ctx.addPath(p2); ctx.fillPath(using: .evenOdd)
+            }
+            ctx.restoreGState()
         }
-        NSGraphicsContext.restoreGraphicsState()
     }
 
     /// Rendered width of a label, so callers can space things against the real

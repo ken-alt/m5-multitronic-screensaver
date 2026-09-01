@@ -173,16 +173,22 @@ public class ChronometerView: ScreenSaverView {
         let dx = CGFloat(sin(drift / 97.0 * 2 * .pi)) * amp
         let dy = CGFloat(sin(drift / 131.0 * 2 * .pi)) * amp * 0.6
 
-        let plateW = min(bounds.width * 0.72, bounds.height * 2.1)
-        let plateH = plateW * 0.36
+        // Size the apertures from the space actually available, then let the
+        // plate follow. Deriving the windows from the plate instead made the
+        // pair plus its gap 1.125x the plate width, so they hung off both ends.
+        let plateW = min(bounds.width * 0.76, bounds.height * 2.3)
+        let unit = CGRect(x: 0, y: 0, width: 1, height: 1)
+        let gapPerHeight = CounterChrome.bezelSideWidth(forAperture: unit) * 2 + 0.30
+        let winHeight = (plateW * 0.88) / (2 * ChronometerView.windowAspect + gapPerHeight)
+        let plateH = winHeight / 0.27
         let p = CGRect(x: bounds.midX - plateW / 2 + dx,
                        y: bounds.midY - plateH / 2 + dy,
                        width: plateW, height: plateH)
 
         CounterChrome.drawUnitPlate(ctx, p, screwInset: p.width * 0.035)
 
-        let winH = p.height * 0.32
-        let winY = p.maxY - p.height * 0.62
+        let winH = winHeight
+        let winY = p.maxY - p.height * 0.60
         let eachW = winH * ChronometerView.windowAspect
         let sideW = CounterChrome.bezelSideWidth(
             forAperture: CGRect(x: 0, y: 0, width: 1, height: winH))
@@ -238,7 +244,7 @@ public class ChronometerView: ScreenSaverView {
             let capClear = togS * 0.45
             let groupW = togS + capClear + capW
             let togX = p.midX - groupW / 2 + togS / 2
-            let rowY = p.minY + p.height * 0.205
+            let rowY = p.minY + p.height * 0.155
             Hardware.drawToggle(ctx, at: CGPoint(x: togX, y: rowY), scale: togS)
             CounterChrome.drawLegend(ctx, ["LIGHT", "SWITCH"],
                                      leftAt: CGPoint(x: togX + togS / 2 + capClear, y: rowY),
