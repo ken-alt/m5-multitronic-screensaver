@@ -30,9 +30,9 @@ The M-5 computer readout field on its own.
 
 ![](docs/clock-classic.png)
 
-The field with the clock module, built as the original prop: ink on pale wheels behind a white mask, with a light switch.
+The field with the clock module, built as the original prop: ink on pale wheels behind a white mask, turning on an arc.
 
-**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 187 KB
+**[Download M-5 Multitronic with Clock - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Classic.saver.zip)** · 186 KB
 
 ### M-5 Multitronic with Clock - Remaster
 
@@ -40,7 +40,7 @@ The field with the clock module, built as the original prop: ink on pale wheels 
 
 The field with the clock module as the remastered episode shows it: amber numerals lit from within, on black.
 
-**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 175 KB
+**[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 184 KB
 
 ### TOS Chronometer - Classic
 
@@ -57,6 +57,28 @@ Stardate and ship's time, original prop.
 Stardate and ship's time, remastered finish.
 
 **[Download TOS Chronometer - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Remaster.saver.zip)** · 122 KB
+
+## Options
+
+Both clock savers carry a configure sheet — the **Options…** button beside the
+saver in System Settings → Screen Saver.
+
+| | |
+|---|---|
+| **Time format** | 12-hour (default) or 24-hour |
+
+A 24-hour reading has no meridiem, so that window is not merely blanked — it is
+removed, and the plate narrows by exactly the window and gap that went away so
+the two remaining readouts keep the margins they had. Nothing else about the
+12-hour layout changes.
+
+`hasConfigureSheet` and `configureSheet` are both present and undeprecated in
+the macOS 26 SDK, and the redesigned System Settings pane still calls them, so
+this needs no private API. The setting is stored through `ScreenSaverDefaults`,
+which is keyed by bundle identifier — each variant therefore keeps its own.
+
+The chronometers deliberately have no such option: the prop shows ship's time
+in 24 hours with no meridiem window, and that is what they reproduce.
 
 ## Two eras of the same prop
 

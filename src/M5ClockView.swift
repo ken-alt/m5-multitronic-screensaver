@@ -25,10 +25,11 @@ public class M5ClockView: M5PanelView {
     /// configured, so both eras ship as separate screensavers.
     var readoutFinish: CounterFinish { return .modern }
 
-    /// The light switch is part of the mechanical panel. An emissive readout
-    /// has no lamp to switch, so the Remaster does without it and the clock
-    /// recentres over the plate on its own — the switch slot falls to zero.
-    var showsLightSwitch: Bool { return readoutFinish == .retro }
+    /// The clock module carries no light switch in either era. The prop's
+    /// switch belongs to the chronometer panel, which is where it stays; here
+    /// it only crowded a module that is already small. The readouts recentre
+    /// over the plate on their own, since the switch slot falls to zero width.
+    var showsLightSwitch: Bool { return false }
 
     /// Aperture proportion: wide rather than square, as on the prop.
     private static let windowAspect: CGFloat = 2.9
@@ -36,6 +37,26 @@ public class M5ClockView: M5PanelView {
     /// How far the module wanders, as a fraction of the smaller screen
     /// dimension. Small, because it is already close to an edge.
     private static let driftAmp: CGFloat = 0.010
+
+    // MARK: Options
+
+    public override var hasConfigureSheet: Bool { return true }
+
+    public override var configureSheet: NSWindow? {
+        return ClockOptions.shared.sheet(for: self)
+    }
+
+    /// Drops the cached chrome so the next frame rebuilds it. Switching to a
+    /// 24-hour reading removes the meridiem window entirely, which changes the
+    /// module's width and how the readouts centre.
+    func optionsChanged() {
+        chromeKey = ""
+        let now = Date()
+        hoursMins.set(ShipboardClock.hoursMinutes(now), animated: false)
+        seconds.set(ShipboardClock.seconds(now), animated: false)
+        meridiem.set(ShipboardClock.meridiem(now), animated: false)
+        setNeedsDisplay(bounds)
+    }
 
     public override init?(frame: NSRect, isPreview: Bool) {
         super.init(frame: frame, isPreview: isPreview)
@@ -176,7 +197,19 @@ public class M5ClockView: M5PanelView {
                                width: eachW.rounded(), height: winH.rounded()))
             x += eachW + gap
         }
-        return Layout(plate: p, windows: wins, winH: winH,
+
+        // A 24-hour reading has no meridiem, and a full-width plate would leave
+        // the two remaining windows stranded in empty anodising. Take the plate
+        // in by exactly the window and gap that went away — every other
+        // dimension, and the 12-hour layout, is untouched.
+        var plate = p
+        if texts.count < 3 {
+            let shed = ((eachW + gap) * CGFloat(3 - texts.count)).rounded()
+            plate = CGRect(x: 0, y: 0, width: p.width - shed, height: p.height)
+            wins = wins.map { $0.offsetBy(dx: -(shed / 2).rounded(), dy: 0) }
+        }
+
+        return Layout(plate: plate, windows: wins, winH: winH,
                       lampR: p.height * 0.036,
                       lampY: p.maxY - p.height * 0.155,
                       labelSize: p.height * 0.068,
@@ -311,9 +344,8 @@ public class M5ClockView: M5PanelView {
         let amp = min(bounds.width, bounds.height) * M5ClockView.driftAmp
         let dx = (CGFloat(sin(clockDrift / 89.0 * 2 * .pi)) * amp).rounded()
         let dy = (CGFloat(sin(clockDrift / 113.0 * 2 * .pi)) * amp * 0.7).rounded()
-        let base = plate(offsetBy: .zero)
-        let ox = base.minX.rounded() + dx
-        let oy = base.minY.rounded() + dy
+        let ox = (bounds.midX - l.plate.width / 2).rounded() + dx
+        let oy = (bounds.maxY - l.plate.height - bounds.height * 0.055).rounded() + dy
 
         if let img = panelImage {
             ctx.draw(img, in: CGRect(x: ox - chromePad, y: oy - chromePad,

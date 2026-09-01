@@ -34,7 +34,29 @@ enum Stardate {
 /// The shipboard clock. The prop runs 24-hour; set `use24Hour` to false for a
 /// 12-hour reading, which then needs the AM/PM window beside it.
 enum ShipboardClock {
-    static let use24Hour = false
+    /// Persisted per saver. `ScreenSaverDefaults` is keyed by bundle
+    /// identifier, and each variant ships as its own bundle, so the setting
+    /// belongs to whichever saver you actually run.
+    static var defaults: ScreenSaverDefaults? {
+        let id = Bundle(for: ChronometerView.self).bundleIdentifier ?? "com.kencosci.m5"
+        return ScreenSaverDefaults(forModuleWithName: id)
+    }
+
+    private static var cached24: Bool?
+
+    static var use24Hour: Bool {
+        get {
+            if let c = cached24 { return c }
+            let v = defaults?.bool(forKey: "use24Hour") ?? false
+            cached24 = v
+            return v
+        }
+        set {
+            cached24 = newValue
+            defaults?.set(newValue, forKey: "use24Hour")
+            defaults?.synchronize()
+        }
+    }
 
     static func string(_ date: Date) -> String {
         let c = Calendar.current.dateComponents([.hour, .minute, .second], from: date)

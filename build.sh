@@ -74,7 +74,8 @@ saver "TOS Chronometer - Classic" "ChronometerRetro" src/ChronometerRetro-Info.p
       ${COUNTER} src/ChronometerRetroView.swift
 
 saver "M-5 Multitronic with Clock - Remaster" "M5Clock" src/M5Clock-Info.plist \
-      src/M5PanelView.swift src/M5ClockView.swift ${COUNTER}
+      src/M5PanelView.swift src/M5ClockView.swift src/ClockOptions.swift ${COUNTER}
 
 saver "M-5 Multitronic with Clock - Classic" "M5ClockRetro" src/M5ClockRetro-Info.plist \
-      src/M5PanelView.swift src/M5ClockView.swift src/M5ClockRetroView.swift ${COUNTER}
+      src/M5PanelView.swift src/M5ClockView.swift src/M5ClockRetroView.swift \
+      src/ClockOptions.swift ${COUNTER}

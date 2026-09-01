@@ -114,7 +114,7 @@ final class CounterWindow {
     var finish: CounterFinish = .modern {
         // 0.50s is thirty frames at 60fps for the wheel to turn through; the
         // emissive readout only has to transition.
-        didSet { rollDuration = (finish == .retro) ? 0.50 : 0.20 }
+        didSet { rollDuration = (finish == .retro) ? 0.50 : 0.12 }   // emissive: brief, or the two numerals read as a double image
     }
 
     var fixedPitch: CGFloat?
@@ -325,21 +325,29 @@ final class CounterWindow {
                                   squash: max(0.10, cos(theta)), collecting: lit)
                     }
                 } else {
-                    // No arc here, so the slide carries its own easing.
-                    let e = CGFloat(easeInOutCubic(slot.roll))
                     // The remastered readout is emissive — a lit display with
-                    // no wheel behind it — so the numerals translate rather
-                    // than turn. Nothing rotates, so nothing foreshortens.
+                    // no wheel behind it — so a numeral does not travel
+                    // anywhere at all. The old one goes out as the new one
+                    // comes up in its place.
                     //
-                    // Far enough that the outgoing digit clears the aperture
-                    // before the incoming one is fully in. Keying this to digit
-                    // height alone breaks once glyphs are small relative to the
-                    // window: both readings end up visible, stacked.
-                    let travel = max(digitH * 1.30, (win.height + digitH) * 0.5)
-                    drawGlyph(ctx, slot.previous, in: cell.offsetBy(dx: 0, dy: travel * e),
-                              collecting: lit)
-                    drawGlyph(ctx, slot.current, in: cell.offsetBy(dx: 0, dy: -travel * (1 - e)),
-                              collecting: lit)
+                    // It used to slide, which is a shorter journey than the
+                    // Classic's arc but still reads as a drum turning past an
+                    // aperture. That is precisely the mechanism this era does
+                    // not have: nothing moves behind the glass.
+                    //
+                    // Linear, not eased: a lamp changing brightness has no
+                    // inertia to ease. These glyphs draw with plusLighter, so
+                    // the two contributions add — which is how light behaves,
+                    // and keeps the cell from dipping dark mid-change.
+                    let e = CGFloat(slot.roll)
+                    ctx.saveGState()
+                    ctx.setAlpha(1 - e)
+                    drawGlyph(ctx, slot.previous, in: cell, collecting: lit)
+                    ctx.restoreGState()
+                    ctx.saveGState()
+                    ctx.setAlpha(e)
+                    drawGlyph(ctx, slot.current, in: cell, collecting: lit)
+                    ctx.restoreGState()
                 }
             }
             ctx.restoreGState()
