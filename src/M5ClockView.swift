@@ -251,7 +251,10 @@ public class M5ClockView: M5PanelView {
 
         panelImage = CounterChrome.renderScaled(size, scale: scale) { c in
             c.translateBy(x: pad, y: pad)
-            CounterChrome.drawUnitPlate(c, l.plate, screwInset: l.plate.width * 0.045)
+            // No centre screws: on a module this shallow they land on the SEC
+            // lamp above and the aperture frames below.
+            CounterChrome.drawUnitPlate(c, l.plate, screwInset: l.plate.width * 0.045,
+                                        centreScrews: false)
 
             for (i, r) in l.windows.enumerated() {
                 windows[i].drawBelow(c, in: r)
