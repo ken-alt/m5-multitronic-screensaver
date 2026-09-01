@@ -12,9 +12,10 @@ import CoreText
 // Type-scoped rather than file-scope globals on purpose — see the README note
 // about file-scope `let` crashing once the bundle is dlopen'd.
 enum CounterStyle {
-    /// The drum is a physical surface, so it is a dark warm grey rather than
-    /// black. Against black the numerals just float.
-    static let windowFill = CGColor(red: 0.118, green: 0.101, blue: 0.076, alpha: 1)
+    /// The remastered readout is an emissive display: black, with the numerals
+    /// lit from within. Only the Classic has a physical drum surface to catch
+    /// light, and that has its own colour below.
+    static let windowFill = CGColor(red: 0.020, green: 0.019, blue: 0.021, alpha: 1)
     static let amber      = (r: CGFloat(0.965), g: CGFloat(0.820), b: CGFloat(0.290))
     static let label      = CGColor(red: 0.87, green: 0.87, blue: 0.855, alpha: 1)
 
@@ -179,21 +180,23 @@ final class CounterWindow {
 
         let lit = drawReading(ctx, in: win)
 
-        if finish == .modern {
-            CounterChrome.drawLampFalloff(ctx, in: win)
-            CounterChrome.drawDigitSheen(ctx, in: win, glyphs: lit)
-            CounterChrome.drawLamps(ctx, in: win)
-        } else {
+        // Nothing lights the emissive readout — the numerals are the light
+        // source — so the drum shading, the lamp wash and the mask all belong
+        // to the Classic alone.
+        if finish == .retro {
             CounterChrome.drawRetroShading(ctx, in: win)
         }
+        _ = lit
 
         // No seam across the middle. A split-flap has one; a rotating barrel
         // shows a continuous digit face, and the hard line read as the wrong
         // mechanism entirely.
         ctx.setBlendMode(.normal)
 
-        CounterChrome.drawLetterbox(ctx, in: win, finish: finish,
-                                    cutout: drumExtent, digitHeight: lastDigitHeight)
+        if finish == .retro {
+            CounterChrome.drawLetterbox(ctx, in: win, finish: finish,
+                                        cutout: drumExtent, digitHeight: lastDigitHeight)
+        }
         CounterChrome.drawGloss(ctx, in: win)
         CounterChrome.drawInnerShadow(ctx, in: win)
     }
@@ -340,11 +343,11 @@ final class CounterWindow {
 
         // Each character rides its own wheel, so there is a physical break
         // between them. A thin dark line reads as the gap between drums.
+        guard finish == .retro else { return lit }
         ctx.saveGState()
         CounterChrome.clipApertureFor(ctx, win)
         ctx.setBlendMode(.normal)
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0,
-                                 alpha: finish == .retro ? 0.88 : 0.72))
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 0.88))
         let sepW = max(1, win.height * (finish == .retro ? 0.020 : 0.014))
         drumExtent = (extentLo, extentHi)
         for bx in boundaries {
@@ -568,10 +571,10 @@ enum CounterChrome {
         clipAperture(ctx, win)
     }
     private static func clipAperture(_ ctx: CGContext, _ win: CGRect) {
-        // A rectangular clip, not the rounded aperture: the bezel overlaps the
-        // corners anyway, so nothing rounded is visible, and rounded-path
-        // clipping is markedly more expensive to composite through.
-        ctx.clip(to: win)
+        // Follows the bezel's curve. A rectangular clip is cheaper but leaves
+        // the interior squared off inside a rounded frame, which shows.
+        ctx.addPath(aperture(win))
+        ctx.clip()
     }
 
     /// The screen itself: gloss black, the way an OLED panel reads when it is

@@ -91,7 +91,9 @@ public class ChronometerView: ScreenSaverView {
 
     /// Aperture proportion. Wider than the clock module's, because these
     /// windows carry eight characters and the panel is far bigger on screen.
-    private static let windowAspect: CGFloat = 4.0
+    /// Wide enough that an eight-character reading stops well clear of the
+    /// frame. At 4.0 the outermost wheels ran right up to the bezel.
+    private static let windowAspect: CGFloat = 4.5
     private static let driftAmp: CGFloat = 0.016
 
     public override init?(frame: NSRect, isPreview: Bool) {
@@ -216,9 +218,12 @@ public class ChronometerView: ScreenSaverView {
             CounterChrome.drawLED(ctx, at: CGPoint(x: r.midX, y: lampY), radius: lampR,
                                   red: 0.94, green: 0.28, blue: 0.06)
             w.draw(ctx, in: r)
+            // Clear of the bezel's lower edge, not just of the aperture — the
+            // frame stands proud below the opening.
+            let capY = winY - CounterChrome.bezelWidth(
+                forAperture: CGRect(x: 0, y: 0, width: 1, height: winH)) - labelSize * 0.85
             CounterChrome.drawEtchedLabel(ctx, captions[i],
-                                          centeredAt: CGPoint(x: r.midX,
-                                                              y: p.minY + p.height * 0.155),
+                                          centeredAt: CGPoint(x: r.midX, y: capY),
                                           size: labelSize)
             x += eachW + gap
         }

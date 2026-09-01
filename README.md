@@ -29,17 +29,19 @@ foreshortening is what reads as rotation rather than a card sliding past.
 
 ![](docs/chronometer-classic.png)
 
-**Remaster** is an emissive readout: lit amber numerals on dark drums. There is
-no wheel to turn and no lamp to switch, so digits translate rather than rotate,
-and the clock module drops the light switch entirely.
+**Remaster** is an emissive display — amber numerals lit from within, on black.
+There is no wheel, so there are no division lines and nothing for a lamp to
+fall on; the cell spacing is kept only so the two eras read at the same size.
+Digits translate rather than rotate, and the clock module drops the light
+switch entirely, since there is no lamp to switch.
 
 ![](docs/chronometer-remaster.png)
 
-The shading runs opposite ways for the same reason. The dark drum is lit from
-the slot edges, brightest top and bottom. The pale drum has no lamp of its own
-— light enters from behind the mask, strongest along the top — so it darkens
-towards the bottom, and the shading multiplies over the numerals because they
-are printed on that surface rather than glowing through it.
+Only the Classic is shaded at all. Its pale drum has no lamp of its own —
+light enters from behind the mask, strongest along the top — so the surface
+darkens towards the bottom, and the shading multiplies over the numerals
+because they are printed on it rather than glowing through it. The Remaster is
+its own light source, so nothing shades it.
 
 ## The clock module
 
