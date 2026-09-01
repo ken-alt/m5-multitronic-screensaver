@@ -217,6 +217,30 @@ default screensaver thumbnail — confirmed by Apple DTS on the
 macOS 26 custom thumbnails do not display at all.
 
 
+## "macOS cannot verify this screensaver"
+
+Expected, and not a sign anything is wrong with the download. These bundles are
+**ad-hoc signed**: the signature proves the files have not been altered since
+they were built, but it carries no Apple Developer identity, so Gatekeeper has
+no one to attribute them to. Your browser also tags anything downloaded with a
+quarantine flag, and that flag is what raises the dialog.
+
+Clear it and the saver runs normally:
+
+```bash
+xattr -dr com.apple.quarantine ~/Library/Screen\ Savers/*.saver
+```
+
+The bundle is unchanged by this — `codesign --verify --deep --strict` still
+passes afterwards. You are telling macOS you trust the source, not disabling a
+check on the file's integrity.
+
+Making the dialog go away properly means a Developer ID certificate and
+notarisation, which needs a paid Apple Developer Program membership. For a free
+MIT screensaver that is a real cost for a dialog you see once, so it is not done
+here. Anyone who would rather not trust a stranger's binary can build from
+source instead — see **Install** above; it needs only Xcode.
+
 ## Fonts
 
 `DigitFacePreference` resolves DIN Condensed Bold → SF Condensed Bold → the
