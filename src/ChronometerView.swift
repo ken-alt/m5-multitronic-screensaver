@@ -123,6 +123,17 @@ enum ShipboardClock {
         guard !use24Hour else { return "" }
         return (Calendar.current.component(.hour, from: date) < 12) ? "AM" : "PM"
     }
+
+    /// The same reading for a panel that keeps its meridiem window on a
+    /// 24-hour clock. The drum has nowhere to go, so it parks on a dash — the
+    /// position a real counter wheel would carry for "not in use" — instead of
+    /// the window being taken out of the plate.
+    static let meridiemDash = "\u{2013}"
+
+    static func meridiemMark(_ date: Date) -> String {
+        let m = meridiem(date)
+        return m.isEmpty ? meridiemDash : m
+    }
 }
 
 @objc(ChronometerView)

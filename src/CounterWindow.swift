@@ -432,9 +432,18 @@ final class CounterWindow {
     /// the pitch, so without this the two can disagree and the reading spills
     /// out of its cells.
     func widestGlyphRatio() -> CGFloat {
+        return widestGlyphRatio(in: String(slots.map { $0.current }))
+    }
+
+    /// The same measurement for a reading the drum is not currently showing.
+    /// A panel whose wheels must stay one size whatever they carry sizes itself
+    /// against every reading it might have to show, not the one on screen —
+    /// otherwise the glyphs change height the moment the widest character
+    /// rolls out of the window.
+    func widestGlyphRatio(in text: String) -> CGFloat {
         var widest: CGFloat = 0
-        for slot in slots {
-            guard let p = unitPath(slot.current) else { continue }
+        for ch in text {
+            guard let p = unitPath(ch) else { continue }
             widest = max(widest, p.boundingBox.width)
         }
         return widest
@@ -1112,10 +1121,17 @@ enum CounterChrome {
         ctx.restoreGState()
     }
 
-    /// A lit LED standing proud of the panel: contact shadow, a dark collar,
-    /// a lens with a hot off-centre core, and a specular off the dome.
+    /// An LED standing proud of the panel: contact shadow, a dark collar, a
+    /// lens with a hot off-centre core, and a specular off the dome.
+    ///
+    /// `lit: false` is the same fitting with no current through it. The lamp
+    /// does not disappear — the collar, the contact shadow and the specular
+    /// off the dome are all still there; only the emission goes: no spill onto
+    /// the panel, and the lens reads as dark coloured glass lit from outside
+    /// rather than from within.
     static func drawLED(_ ctx: CGContext, at c: CGPoint, radius r: CGFloat,
-                        red: CGFloat, green: CGFloat, blue: CGFloat) {
+                        red: CGFloat, green: CGFloat, blue: CGFloat,
+                        lit: Bool = true) {
         // Sits above the surface, so it casts down onto the panel.
         ctx.saveGState()
         ctx.setShadow(offset: CGSize(width: 0, height: -r * 0.34),
@@ -1125,10 +1141,11 @@ enum CounterChrome {
                                    width: r * 2.44, height: r * 2.44))
         ctx.restoreGState()
 
-        // Spill onto the surrounding panel.
+        // Spill onto the surrounding panel. An unlit lamp emits nothing, so
+        // there is none.
         ctx.saveGState()
         ctx.setBlendMode(.plusLighter)
-        if let halo = grad([(0.0, CGColor(red: red, green: green, blue: blue, alpha: 0.26)),
+        if lit, let halo = grad([(0.0, CGColor(red: red, green: green, blue: blue, alpha: 0.26)),
                             (0.40, CGColor(red: red, green: green, blue: blue, alpha: 0.07)),
                             (1.0, CGColor(red: red, green: green, blue: blue, alpha: 0.0))]) {
             ctx.drawRadialGradient(halo, startCenter: c, startRadius: r * 0.9,
@@ -1146,17 +1163,26 @@ enum CounterChrome {
         ctx.saveGState()
         ctx.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
         ctx.clip()
-        if let body = grad([(0.0, CGColor(red: min(1, red * 1.5 + 0.42),
-                                          green: min(1, green * 1.3 + 0.40),
-                                          blue: min(1, blue * 1.3 + 0.36), alpha: 1)),
-                            (0.45, CGColor(red: min(1, red * 1.12), green: green, blue: blue, alpha: 1)),
-                            (1.0, CGColor(red: red * 0.50, green: green * 0.26,
-                                          blue: blue * 0.26, alpha: 1))]) {
+        // Unlit, the lens is the same coloured glass with nothing behind it:
+        // dark, still tinted, and darkest at the rim where the collar shades
+        // it. One set of stops scaled by `drive` rather than two written out,
+        // so the two states cannot drift apart in hue.
+        let drive: CGFloat = lit ? 1.0 : 0.22
+        let core: (r: CGFloat, g: CGFloat, b: CGFloat) =
+            lit ? (0.42, 0.40, 0.36) : (0.05, 0.048, 0.043)
+        if let body = grad([(0.0, CGColor(red: min(1, red * 1.5 * drive + core.r),
+                                          green: min(1, green * 1.3 * drive + core.g),
+                                          blue: min(1, blue * 1.3 * drive + core.b), alpha: 1)),
+                            (0.45, CGColor(red: min(1, red * 1.12 * drive),
+                                           green: green * drive, blue: blue * drive, alpha: 1)),
+                            (1.0, CGColor(red: red * 0.50 * drive, green: green * 0.26 * drive,
+                                          blue: blue * 0.26 * drive, alpha: 1))]) {
             ctx.drawRadialGradient(body,
                                    startCenter: CGPoint(x: c.x - r * 0.18, y: c.y + r * 0.22),
                                    startRadius: 0, endCenter: c, endRadius: r, options: [])
         }
-        if let spec = grad([(0, white(0.85)), (1, white(0.0))]) {
+        // The dome still catches the room light either way.
+        if let spec = grad([(0, white(lit ? 0.85 : 0.70)), (1, white(0.0))]) {
             let sc = CGPoint(x: c.x + lightX * r * 0.42, y: c.y + lightY * r * 0.42)
             ctx.drawRadialGradient(spec, startCenter: sc, startRadius: 0,
                                    endCenter: sc, endRadius: r * 0.44, options: [])

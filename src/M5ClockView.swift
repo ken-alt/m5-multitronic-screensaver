@@ -11,7 +11,7 @@ import ScreenSaver
 import Cocoa
 
 @objc(M5ClockView)
-public class M5ClockView: M5PanelView {
+public class M5ClockView: M5PanelView, ClockOptionsHost {
 
     // Three drums, as on the countdown panel: hours and minutes together,
     // seconds on their own, then the meridiem.
@@ -54,6 +54,10 @@ public class M5ClockView: M5PanelView {
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
     }
+
+    /// What the sheet says the choice does here: this module drops the window
+    /// rather than parking it on a dash.
+    var optionsNote: String { return "24-hour hides the AM/PM window." }
 
     /// Drops the cached chrome so the next frame rebuilds it. Switching to a
     /// 24-hour reading removes the meridiem window entirely, which changes the

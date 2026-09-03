@@ -1,6 +1,6 @@
 # Star Trek TOS screensavers
 
-Six macOS screensavers built from set props in *Star Trek: The Original
+Seven macOS screensavers built from set props in *Star Trek: The Original
 Series*. All are original code and original artwork; only the look is
 referenced.
 
@@ -10,6 +10,7 @@ referenced.
 | **TOS Chronometer — Remaster** | stardate and ship's time, remastered finish |
 | **TOS Chronometer — Classic** | the same panel as the original prop |
 | **TOS Helm Chronometer** | the helm console clock as the prop reads: no stardate |
+| **TOS Shipboard Clock** | the clock module on its own, with a `12 HR`/`24 HR` annunciator |
 | **M-5 Multitronic with Clock — Remaster** | the field with a clock module |
 | **M-5 Multitronic with Clock — Classic** | the same, original-prop finish |
 
@@ -52,6 +53,17 @@ The field with the clock module, built as the original prop: ink on pale wheels 
 The field with the clock module as the remastered episode shows it: amber numerals lit from within, on black.
 
 **[Download M-5 Multitronic with Clock - Remaster.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/M-5%20Multitronic%20with%20Clock%20-%20Remaster.saver.zip)** · 186 KB
+
+### TOS Shipboard Clock
+
+![](docs/shipboard-clock.png)
+
+The clock module out of the M-5 panel and stood on its own, at full size.
+Original-prop finish. The meridiem window stays whichever format you pick: on a
+24-hour reading its drum parks on a dash, and the annunciator under it — `12
+HR` and `24 HR`, exactly one lit — says which.
+
+**[Download TOS Shipboard Clock.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Shipboard%20Clock.saver.zip)** · 158 KB
 
 ### TOS Chronometer - Classic
 
@@ -125,6 +137,12 @@ wheels are the same width, so the punctuation gets a full cell.
 | ![](docs/clock-classic.png) | ![](docs/clock-remaster.png) |
 | Classic | Remaster |
 
+The same module also ships on its own as **TOS Shipboard Clock** — the identical
+object at four times the size, every proportion held as a fraction of the plate
+so nothing is redrawn for the larger version. Standing alone it carries one
+fitting the sunk module does not: a two-lamp annunciator under the meridiem
+window, the only lamps on the panel that mean anything.
+
 
 ## Stardate
 
@@ -188,17 +206,54 @@ fact that the numerals carry a visible vertical falloff from the lamps.
 
 ## Options
 
-Both clock savers carry a configure sheet — the **Options…** button beside the
-saver in System Settings → Screen Saver.
+The three savers with a clock module carry a configure sheet — the
+**Options…** button beside the saver in System Settings → Screen Saver.
 
 | | |
 |---|---|
 | **Time format** | 12-hour (default) or 24-hour |
 
-A 24-hour reading has no meridiem, so that window is not merely blanked — it is
-removed, and the plate narrows by exactly the window and gap that went away so
-the two remaining readouts keep the margins they had. Nothing else about the
-12-hour layout changes.
+A 24-hour reading has no meridiem, and the two panels answer that differently
+because the module is a different size in each.
+
+On the **M-5 panel** the module is a small fitting in the corner of a bar
+field, so the window is not merely blanked — it is removed, and the plate
+narrows by exactly the window and gap that went away so the two remaining
+readouts keep the margins they had. Nothing else about the 12-hour layout
+changes.
+
+On **TOS Shipboard Clock** the plate is the whole object, so it keeps its
+shape. The drum parks on a dash, and the annunciator in the band below says
+which format the clock is in: `12 HR` and `24 HR`, exactly one lamp lit. The
+dark one is the same fitting with no current through it — collar and specular
+still there, nothing spilling onto the panel.
+
+![](docs/shipboard-clock-24.png)
+
+**Why a pair and not one lamp.** A single lamp under a two-state legend has to
+make dark mean both *24-hour* and *burnt out*, and nothing on the panel
+separates them. A dark lamp beside a lit one means neither: it reads as *not
+this one*. That is also why the legend sits on its own row rather than in the
+caption line — `12 ● 24` would copy the `HRS ● MIN` layout, where the lamp
+belongs to the window and both words are always true, while meaning something
+entirely different.
+
+The annunciator is centred in the meridiem column rather than on the plate, so
+the caption, the drum and the lamps stack into one fitting. On the centreline
+it read as belonging to the `SEC` window above it — the one readout it has
+nothing to do with.
+
+The captions name the unit, incidentally, which is why the third one reads
+`MERIDIEM` and not `AM/PM`: `HRS`, `MIN` and `SEC` do not read `01-12`,
+`00-59`, and a caption repeating what its own window already shows in
+inch-high letters would be the only one on the panel telling you nothing. It is
+also the one caption with no lamp of its own — its column states that
+underneath.
+
+The wheels stay one size across both formats, incidentally: the digit height is
+measured against every character the drums can carry rather than the one on
+screen, so they do not grow when `M` — the widest of them — rolls out of the
+window.
 
 `hasConfigureSheet` and `configureSheet` are both present and undeprecated in
 the macOS 26 SDK, and the redesigned System Settings pane still calls them, so

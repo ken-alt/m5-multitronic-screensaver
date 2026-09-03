@@ -14,20 +14,33 @@
 import ScreenSaver
 import Cocoa
 
+/// What a saver has to provide to carry this sheet. The savers that use it do
+/// not share a base class — one is the M-5 panel with the clock module sunk
+/// into it, another is that module standing alone — and what 24-hour does to
+/// the panel differs between them, so the sheet asks rather than assumes.
+protocol ClockOptionsHost: AnyObject {
+    func optionsChanged()
+
+    /// One line under the control saying what the choice does to *this* panel.
+    var optionsNote: String { get }
+}
+
 final class ClockOptions: NSObject {
 
     static let shared = ClockOptions()
 
     private var window: NSWindow?
     private var format: NSSegmentedControl?
-    private weak var view: M5ClockView?
+    private var note: NSTextField?
+    private weak var view: ClockOptionsHost?
 
     /// The sheet, reused across openings. System Settings runs this modally
     /// and expects the sheet to end itself, so both buttons do.
-    func sheet(for view: M5ClockView) -> NSWindow {
+    func sheet(for view: ClockOptionsHost) -> NSWindow {
         self.view = view
         if let w = window {
             format?.selectedSegment = ShipboardClock.use24Hour ? 1 : 0
+            note?.stringValue = view.optionsNote
             return w
         }
 
@@ -53,13 +66,14 @@ final class ClockOptions: NSObject {
         seg.selectedSegment = ShipboardClock.use24Hour ? 1 : 0
         format = seg
 
-        // A 24-hour reading has no AM/PM, so that window goes away entirely
-        // and the module recentres — worth saying, since it changes the shape
-        // of the panel rather than just its text.
-        let note = NSTextField(labelWithString: "24-hour hides the AM/PM window.")
+        // A 24-hour reading has no AM/PM, and what each panel does about that
+        // window is its own business — worth saying, since it changes the
+        // shape of the panel rather than just its text.
+        let note = NSTextField(labelWithString: view.optionsNote)
         note.font = .systemFont(ofSize: 11)
         note.textColor = .tertiaryLabelColor
         note.frame = NSRect(x: 24, y: 46, width: 332, height: 16)
+        self.note = note
 
         let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancel(_:)))
         cancel.bezelStyle = .rounded
