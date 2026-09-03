@@ -98,6 +98,14 @@ enum ShipboardClock {
         return String(format: "%02d:%02d", shown, c.minute ?? 0)
     }
 
+    /// Hours and minutes, always 24-hour. The chronometer panels read ship's
+    /// time the way the prop does, with no meridiem window to fall back on, so
+    /// they must not go through the 12-hour preference.
+    static func hoursMinutes24(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+
     /// Seconds, on their own drum.
     static func seconds(_ date: Date) -> String {
         return String(format: "%02d", Calendar.current.component(.second, from: date))

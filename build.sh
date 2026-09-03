@@ -73,6 +73,9 @@ saver "TOS Chronometer - Remaster" "Chronometer" src/Chronometer-Info.plist \
 saver "TOS Chronometer - Classic" "ChronometerRetro" src/ChronometerRetro-Info.plist \
       ${COUNTER} src/ChronometerRetroView.swift
 
+saver "TOS Helm Chronometer" "HelmChronometer" src/HelmChronometer-Info.plist \
+      ${COUNTER} src/PanelDial.swift src/HelmChronometerView.swift
+
 saver "M-5 Multitronic with Clock - Remaster" "M5Clock" src/M5Clock-Info.plist \
       src/M5PanelView.swift src/M5ClockView.swift src/ClockOptions.swift ${COUNTER}
 

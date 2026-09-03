@@ -770,15 +770,24 @@ enum CounterChrome {
         drawScrews(ctx, in: plate, inset: screwInset, centres: centreScrews)
     }
 
+    /// Head size for a screw on a plate of this size. Exposed so a panel that
+    /// adds screws of its own — the prop has a pair flanking the light switch
+    /// on some units — matches the ones the plate draws for itself.
+    static func screwRadius(in plate: CGRect) -> CGFloat { return plate.height * 0.020 }
+
+    /// Where a screw row sits, in from the plate edge. Same reasoning as
+    /// `screwRadius`: the rows have to agree.
+    static func screwRowInset(_ inset: CGFloat) -> CGFloat { return inset * 0.75 }
+
     /// Panel screws, as on the prop: corners plus midpoints along the long edges.
     static func drawScrews(_ ctx: CGContext, in plate: CGRect, inset: CGFloat,
                            centres: Bool = true) {
-        let rad = plate.height * 0.020
+        let rad = screwRadius(in: plate)
         var i = 0
         let columns = centres ? [plate.minX + inset, plate.midX, plate.maxX - inset]
                               : [plate.minX + inset, plate.maxX - inset]
         for x in columns {
-            for y in [plate.minY + inset * 0.75, plate.maxY - inset * 0.75] {
+            for y in [plate.minY + screwRowInset(inset), plate.maxY - screwRowInset(inset)] {
                 // Vary the driver angle; identical screws read as wallpaper.
                 Hardware.drawScrew(ctx, at: CGPoint(x: x, y: y), radius: rad,
                                    angle: CGFloat(i) * 0.7 + 0.35)
@@ -1197,7 +1206,17 @@ enum CounterChrome {
         var t = CGAffineTransform(translationX: c.x - b.midX, y: c.y - b.midY)
         guard let path = glyphs.copy(using: &t) else { return }
 
-        let d = size * 0.055
+        etchFill(ctx, path, depth: size * 0.055)
+    }
+
+    /// Fills an outline as an engraving: ink in the groove, then the near wall
+    /// shadowed and the far wall catching the light, both clipped *inside* the
+    /// outline. That clip is the whole trick — shading dropped behind the shape
+    /// reads as type sitting on the surface, not as metal cut away.
+    ///
+    /// Shared so that anything engraved into a panel — captions, legends,
+    /// curved dial markings — cuts to the same depth under the same light.
+    static func etchFill(_ ctx: CGContext, _ path: CGPath, depth d: CGFloat) {
         ctx.saveGState()
         ctx.addPath(path)
         ctx.setFillColor(CGColor(red: 0.80, green: 0.80, blue: 0.79, alpha: 0.96))
@@ -1250,22 +1269,7 @@ enum CounterChrome {
             guard b.width > 0 else { continue }
             var t = CGAffineTransform(translationX: p.x - b.minX, y: y - b.midY)
             guard let path = glyphs.copy(using: &t) else { continue }
-            let d = size * 0.055
-            ctx.saveGState()
-            ctx.addPath(path)
-            ctx.setFillColor(CGColor(red: 0.80, green: 0.80, blue: 0.79, alpha: 0.96))
-            ctx.fillPath()
-            ctx.addPath(path)
-            ctx.clip()
-            var s1 = CGAffineTransform(translationX: lightX * d, y: lightY * d)
-            if let p1 = path.copy(using: &s1) {
-                ctx.setFillColor(black(0.55)); ctx.addPath(p1); ctx.fillPath(using: .evenOdd)
-            }
-            var s2 = CGAffineTransform(translationX: -lightX * d, y: -lightY * d)
-            if let p2 = path.copy(using: &s2) {
-                ctx.setFillColor(white(0.34)); ctx.addPath(p2); ctx.fillPath(using: .evenOdd)
-            }
-            ctx.restoreGState()
+            etchFill(ctx, path, depth: size * 0.055)
         }
     }
 

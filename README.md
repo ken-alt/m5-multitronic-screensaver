@@ -1,6 +1,6 @@
 # Star Trek TOS screensavers
 
-Five macOS screensavers built from set props in *Star Trek: The Original
+Six macOS screensavers built from set props in *Star Trek: The Original
 Series*. All are original code and original artwork; only the look is
 referenced.
 
@@ -9,6 +9,7 @@ referenced.
 | **M-5 Multitronic** | the M-5 computer readout field |
 | **TOS Chronometer — Remaster** | stardate and ship's time, remastered finish |
 | **TOS Chronometer — Classic** | the same panel as the original prop |
+| **TOS Helm Chronometer** | the helm console clock as the prop reads: no stardate |
 | **M-5 Multitronic with Clock — Remaster** | the field with a clock module |
 | **M-5 Multitronic with Clock — Classic** | the same, original-prop finish |
 
@@ -59,6 +60,16 @@ The field with the clock module as the remastered episode shows it: amber numera
 Stardate and ship's time, original prop.
 
 **[Download TOS Chronometer - Classic.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Chronometer%20-%20Classic.saver.zip)** · 134 KB
+
+### TOS Helm Chronometer
+
+![](docs/helm-chronometer.png)
+
+The clock on the helm console, as the prop actually reads, with no stardate:
+hours and minutes on one drum, seconds on their own, the two `TIME RESET` dials,
+and both bat toggles.
+
+**[Download TOS Helm Chronometer.saver.zip](https://github.com/ken-alt/m5-multitronic-screensaver/raw/main/dist/TOS%20Helm%20Chronometer.saver.zip)** · 166 KB
 
 ### TOS Chronometer - Remaster
 
@@ -117,8 +128,8 @@ wheels are the same width, so the punctuation gets a full cell.
 
 ## Stardate
 
-The chronometers show a stardate because it is fun, not because it is
-authoritative. TOS stardates were arbitrary by design — the writers' guide told
+Two of the three chronometers show a stardate because it is fun, not because it
+is authoritative — the **Helm** panel shows none, because the prop shows none. TOS stardates were arbitrary by design — the writers' guide told
 writers to pick any four digits and a decimal, and the show contradicts itself
 constantly. There is nothing to derive.
 
@@ -153,11 +164,14 @@ The proportions, palette and lighting here were measured off two sources
 rather than guessed. Neither is reproduced in this repository — they belong to
 their rights holders — so they are cited instead:
 
-- **The original prop**, a countdown panel: two windows of dark numerals on
-  pale drums, red indicator lamps captioned `HRS`/`MIN` and `SEC`, and two bat
-  toggles labelled *light switch* and *clock switch* below. One switch is kept,
-  centred, on the chronometer panel; the clock module goes without, having no
-  room for it beside three readouts.
+- **The original prop**, the helm console clock: two windows of dark numerals on
+  pale drums, red indicator lamps captioned `HRS`/`MIN` and `SEC`, two `TIME
+  RESET` dials under the first window with their legends curving beneath them,
+  and two bat toggles labelled *light switch* and *clock switch*. **TOS Helm
+  Chronometer** reproduces this panel whole. The other two savers
+  borrow from it selectively: one switch is kept, centred, on the stardate
+  chronometer, and the clock module goes without, having no room for it beside
+  three readouts.
 - **The remastered chronometer**, seen at about 0:46 of
   [this clip](https://www.youtube.com/watch?v=wGB9gjRnv00): amber numerals on
   gloss black behind chrome bezels, captioned `STARDATE` and `SHIPBOARD`.
